@@ -10,15 +10,25 @@ set -e
 
 # Parse command line arguments
 MODEL=""
+B200_MODE=""
+BENCH_BRANCH=""
 while [[ $# -gt 0 ]]; do
     case $1 in
         --model)
             MODEL="$2"
             shift 2
             ;;
+        --b200)
+            B200_MODE="true"
+            shift
+            ;;
+        --benchbranch)
+            BENCH_BRANCH="$2"
+            shift 2
+            ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 [--model MODEL_NAME]"
+            echo "Usage: $0 [--model MODEL_NAME] [--b200] [--benchbranch BRANCH_NAME]"
             exit 1
             ;;
     esac
@@ -78,12 +88,27 @@ cat << 'EOF' > /tmp/run_benchmark_experiment.py
 import sys
 from beaker import Beaker, ExperimentSpec, TaskSpec, TaskContext, ResultSpec, TaskResources, ImageSource, Priority, Constraints, EnvVar
 
-# Get image tag, beaker user, git branch, git hash, and optional model from command line
+# Get image tag, beaker user, git branch, git hash, optional model, b200 mode, and bench branch from command line
 image_tag = sys.argv[1]
 beaker_user = sys.argv[2]
 git_branch = sys.argv[3]
 git_hash = sys.argv[4]
-model = sys.argv[5] if len(sys.argv) > 5 else None
+model = None
+b200_mode = False
+bench_branch = None
+
+# Parse remaining arguments
+arg_idx = 5
+while arg_idx < len(sys.argv):
+    if sys.argv[arg_idx] == "--b200":
+        b200_mode = True
+        arg_idx += 1
+    elif sys.argv[arg_idx] == "--benchbranch":
+        bench_branch = sys.argv[arg_idx + 1]
+        arg_idx += 2
+    else:
+        model = sys.argv[arg_idx]
+        arg_idx += 1
 
 # Initialize Beaker client
 b = Beaker.from_env(default_workspace="ai2/olmocr")
@@ -111,8 +136,14 @@ if has_aws_creds:
         "mkdir -p ~/.aws",
         'echo "$AWS_CREDENTIALS_FILE" > ~/.aws/credentials'
     ])
+
+# Build git clone command with optional branch
+git_clone_cmd = "git clone https://huggingface.co/datasets/allenai/olmOCR-bench"
+if bench_branch:
+    git_clone_cmd += f" -b {bench_branch}"
+
 commands.extend([
-    "git clone https://huggingface.co/datasets/allenai/olmOCR-bench",
+    git_clone_cmd,
     "cd olmOCR-bench && git lfs pull && cd ..",
     pipeline_cmd,
     "python olmocr/bench/scripts/workspace_to_bench.py localworkspace/ olmOCR-bench/bench_data/olmocr --bench-path ./olmOCR-bench/",
@@ -132,7 +163,7 @@ task_spec_args = {
         preemptible=True,
     ),
     "resources": TaskResources(gpu_count=1),
-    "constraints": Constraints(cluster=["ai2/ceres-cirrascale", "ai2/jupiter-cirrascale-2"]),
+    "constraints": Constraints(cluster=["ai2/titan-cirrascale"] if b200_mode else ["ai2/ceres-cirrascale", "ai2/jupiter-cirrascale-2"]),
     "result": ResultSpec(path="/noop-results"),
 }
 
@@ -181,9 +212,9 @@ perf_task_spec_args = {
         priority=Priority.normal,
         preemptible=True,
     ),
-    # Need to reserve all 8 gpus for performance spec or else benchmark results can be off
-    "resources": TaskResources(gpu_count=8),
-    "constraints": Constraints(cluster=["ai2/ceres-cirrascale", "ai2/jupiter-cirrascale-2"]),
+    # Need to reserve all 8 gpus for performance spec or else benchmark results can be off (1 for b200 mode)
+    "resources": TaskResources(gpu_count=1 if b200_mode else 8),
+    "constraints": Constraints(cluster=["ai2/titan-cirrascale"] if b200_mode else ["ai2/ceres-cirrascale", "ai2/jupiter-cirrascale-2"]),
     "result": ResultSpec(path="/noop-results"),
 }
 
@@ -208,12 +239,26 @@ EOF
 
 # Run the Python script to create the experiments
 echo "Creating Beaker experiments..."
+
+# Build command with appropriate arguments
+CMD="$PYTHON /tmp/run_benchmark_experiment.py $IMAGE_TAG $BEAKER_USER $GIT_BRANCH $GIT_HASH"
+
 if [ -n "$MODEL" ]; then
     echo "Using model: $MODEL"
-    $PYTHON /tmp/run_benchmark_experiment.py $IMAGE_TAG $BEAKER_USER $GIT_BRANCH $GIT_HASH "$MODEL"
-else
-    $PYTHON /tmp/run_benchmark_experiment.py $IMAGE_TAG $BEAKER_USER $GIT_BRANCH $GIT_HASH
+    CMD="$CMD $MODEL"
 fi
+
+if [ -n "$B200_MODE" ]; then
+    echo "Using B200 mode: ai2/titan-cirrascale cluster with 1 GPU for perf task"
+    CMD="$CMD --b200"
+fi
+
+if [ -n "$BENCH_BRANCH" ]; then
+    echo "Using bench branch: $BENCH_BRANCH"
+    CMD="$CMD --benchbranch $BENCH_BRANCH"
+fi
+
+eval $CMD
 
 # Clean up temporary file
 rm /tmp/run_benchmark_experiment.py
