@@ -1230,6 +1230,12 @@ async def main():
     os.makedirs(bench_data_dir, exist_ok=True)
     synthetic_json_path = os.path.join(bench_data_dir, f"{args.name}.jsonl")
     open(synthetic_json_path, "w").close()  # Create empty file
+    
+    # Initialize the metadata JSONL file
+    metadata_dir = os.path.join(args.output_dir, "metadata")
+    os.makedirs(metadata_dir, exist_ok=True)
+    metadata_json_path = os.path.join(metadata_dir, f"{args.name}.jsonl")
+    open(metadata_json_path, "w").close()  # Create empty file
 
     # Counter for test statistics
     test_counter = 0
@@ -1251,6 +1257,15 @@ async def main():
                     with open(synthetic_json_path, "a") as f:
                         for test in result["tests"]:
                             f.write(json.dumps(test) + "\n")
+                    
+                    # Write metadata mapping (pdf_id to source URL)
+                    with open(metadata_json_path, "a") as f:
+                        metadata = {
+                            "pdf_id": result["pdf_id"],
+                            "source_url": result["pdf_path"],
+                            "page_number": result["page_number"]
+                        }
+                        f.write(json.dumps(metadata) + "\n")
                     
                     # Update counters
                     nonlocal test_counter
