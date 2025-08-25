@@ -117,6 +117,7 @@ commands = [
     "echo 'Syncing bench data from S3...'",
     "mkdir -p /data/olmOCR-bench",
     "s5cmd sync 's3://ai2-oe-data/jakep/olmocr/olmOCR-bench-snapshot-082225/*' /data/olmOCR-bench/",
+    "s5cmd sync 's3://ai2-oe-data/jakep/grpo_data_mixes/*' /data/jakep/grpo_data_mixes/",
     
     # Build GRPO training command
     "echo 'Starting GRPO training...'",
