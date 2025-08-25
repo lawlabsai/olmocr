@@ -787,6 +787,10 @@ def generate_tests_from_html(html_content: str, pdf_id: str, page_num: int, verb
     # Convert HTML to markdown to get cleaner text for presence and ordering tests
     markdown_content = html_to_markdown_with_frontmatter(html_content)
     
+    # Remove any HTML tables from the markdown content
+    # Tables can persist in markdown as raw HTML and we want to exclude them
+    markdown_content = re.sub(r'<table[^>]*>.*?</table>', '', markdown_content, flags=re.DOTALL | re.IGNORECASE)
+    
     # Extract just the content part (after frontmatter)
     markdown_lines = markdown_content.split('\n')
     content_start_idx = 0
@@ -814,7 +818,7 @@ def generate_tests_from_html(html_content: str, pdf_id: str, page_num: int, verb
                 sentence_str = sentence_str.strip()
 
                 if sentence_str:
-                    # Skip HTML table content that might still be in markdown
+                    # Skip HTML content that might still be in markdown
                     if not sentence_str.startswith('<') and not sentence_str.endswith('>'):
                         # Skip image placeholders - match any markdown image syntax ![...](...)
                         if re.search(r'!\[.*?\]\(.*?\)', sentence_str):
@@ -1039,9 +1043,9 @@ async def process_pdf(pdf_info, args, client, pdf_filter=None):
             return None
 
         # Create output directories
-        html_dir = os.path.join(args.output_dir, "html")
-        pdfs_dir = os.path.join(args.output_dir, "pdfs")
-        training_dir = os.path.join(args.output_dir, "training")
+        html_dir = os.path.join(args.output_dir, "html", args.name)
+        pdfs_dir = os.path.join(args.output_dir, "pdfs", args.name)
+        training_dir = os.path.join(args.output_dir, "training", args.name)
         bench_data_dir = os.path.join(args.output_dir, "bench_data")
         bench_synthetic_dir = os.path.join(bench_data_dir, "pdfs", args.name)
         claude_original_dir = os.path.join(bench_data_dir, "claude_original", args.name)
