@@ -147,7 +147,8 @@ commands.extend([
     "cd olmOCR-bench && git lfs pull && cd ..",
     pipeline_cmd,
     "python olmocr/bench/scripts/workspace_to_bench.py localworkspace/ olmOCR-bench/bench_data/olmocr --bench-path ./olmOCR-bench/",
-    "aws s3 cp --recursive localworkspace/ s3://ai2-oe-data/jakep/olmocr-bench-runs/$BEAKER_WORKLOAD_ID/",
+    "pip install s5cmd",
+    "s5cmd cp localworkspace/ s3://ai2-oe-data/jakep/olmocr-bench-runs/$BEAKER_WORKLOAD_ID/",
     "python -m olmocr.bench.benchmark --dir ./olmOCR-bench/bench_data"
 ])
 
