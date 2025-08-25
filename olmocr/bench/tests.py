@@ -867,11 +867,22 @@ class BaselineTest(BasePDFTest):
 
     """
 
+    max_length: Optional[int] = None # Used to implement blank page checks
+
     max_repeats: int = 30
     check_disallowed_characters: bool = True
 
     def run(self, content: str) -> Tuple[bool, str]:
-        if len("".join(c for c in content if c.isalnum()).strip()) == 0:
+        base_content_len = len("".join(c for c in content if c.isalnum()).strip())
+
+        # If this a blank page check, then it short circuits the rest of the checks
+        if self.max_length is not None:
+            if base_content_len > self.max_length:
+                return False, f"{base_content_len} characters were output for a page we expected to be blank"
+            else:
+                return True, ""
+
+        if base_content_len == 0:
             return False, "The text contains no alpha numeric characters"
 
         # Makes sure that the content has no egregious repeated ngrams at the end, which indicate a degradation of quality
