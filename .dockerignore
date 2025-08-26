@@ -13,3 +13,5 @@ scripts/**/*.sh
 
 # Nor copy any olmocr bench files
 olmOCR-bench/
+olmOCR-bench*/
+html_templates*/
