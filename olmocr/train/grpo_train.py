@@ -5,13 +5,14 @@ GRPO (Generative Reward-based Policy Optimization) training script for OlmOCR.
 import argparse
 import logging
 import os
-from typing import List, Dict, Any, Optional, Set
+from typing import List, Dict, Any, Optional, Set, Tuple
 import asyncio
 import json
 import random
 from pathlib import Path
 import glob
 from functools import lru_cache
+from concurrent.futures import ThreadPoolExecutor
 
 import torch
 import numpy as np
@@ -29,7 +30,7 @@ from io import BytesIO
 
 from olmocr.data.renderpdf import render_pdf_to_base64png
 from olmocr.prompts import build_no_anchoring_v4_yaml_prompt
-from olmocr.bench.tests import load_tests
+from olmocr.bench.tests import load_single_test
 
 # Configure logging
 logging.basicConfig(
@@ -172,24 +173,113 @@ class OlmOCRBenchDataset(Dataset):
             # Return None if processing fails
             return None
 
-@lru_cache(maxsize=128)
-def load_tests_cached(jsonl_file: str):
+@lru_cache(maxsize=1024)
+def load_specific_tests_cached(jsonl_file: str, test_ids_tuple: tuple):
     """
-    Cached version of load_tests to avoid reloading the same JSONL file multiple times.
+    Cached version that loads specific tests by their IDs from a JSONL file.
+    Uses load_single_test to parse individual test entries.
     
     Args:
         jsonl_file: Path to the JSONL file containing test definitions
+        test_ids_tuple: Tuple of test IDs to load (tuple for hashability in lru_cache)
         
     Returns:
-        List of test objects loaded from the file
+        List of test objects matching the specified IDs
     """
-    logger.info(f"Loading tests from {jsonl_file} (will be cached)")
-    return load_tests(jsonl_file)
+    test_ids = set(test_ids_tuple)
+    logger.info(f"Loading {len(test_ids)} specific tests from {jsonl_file}")
+    
+    relevant_tests = []
+    with open(jsonl_file, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                # Parse just enough to get the ID
+                test_data = json.loads(line)
+                if test_data.get('id') in test_ids:
+                    # Use load_single_test to properly parse and validate the test
+                    test = load_single_test(test_data)
+                    relevant_tests.append(test)
+                    # Early exit if we've found all tests
+                    if len(relevant_tests) == len(test_ids):
+                        break
+            except (json.JSONDecodeError, Exception) as e:
+                logger.warning(f"Error parsing test line: {e}")
+                continue
+    
+    return relevant_tests
+
+
+def evaluate_single_completion(args: Tuple[int, Any, str, str, List[str]]) -> Tuple[int, Optional[float]]:
+    """
+    Helper function to evaluate a single completion against its tests.
+    
+    Args:
+        args: Tuple of (index, completion, jsonl_file, pdf_path, test_ids)
+        
+    Returns:
+        Tuple of (index, reward) where reward is float or None for errors
+    """
+    i, completion, comp_jsonl_file, comp_pdf_path, comp_test_ids = args
+    
+    logger.info(f"Completion {i}: PDF: {comp_pdf_path}, JSONL: {comp_jsonl_file}, Test IDs: {comp_test_ids}")
+    
+    if completion is None or not (isinstance(completion, str) or isinstance(completion, list)):
+        logger.warning(f"Invalid completion at index {i}: {type(completion)}")
+        logger.warning(f"completion: {completion}")
+        return i, None
+    
+    if comp_jsonl_file is None or comp_test_ids is None or len(comp_test_ids) == 0:
+        logger.warning(f"Missing metadata for completion {i}")
+        return i, None
+
+    if isinstance(completion, list):
+        completion = completion[0]["content"]
+    
+    try:
+        # Load only the specific tests we need from the JSONL file (cached)
+        # Convert list to tuple for hashability in lru_cache
+        relevant_tests = load_specific_tests_cached(comp_jsonl_file, tuple(comp_test_ids))
+        
+        if not relevant_tests:
+            logger.warning(f"No relevant tests found for test IDs: {comp_test_ids}")
+            return i, None
+        
+        logger.info(f"Found {len(relevant_tests)} relevant tests for completion {i}")
+        
+        # Run all relevant tests on this completion
+        passed = 0
+        total = len(relevant_tests)
+        
+        for test in relevant_tests:
+            try:
+                test_passed, failure_reason = test.run(completion)
+                if test_passed:
+                    passed += 1
+                else:
+                    logger.debug(f"Test {test.id} failed: {failure_reason}")
+            except Exception as e:
+                logger.warning(f"Error running test {test.id}: {e}")
+                # Count errored tests as failures
+                continue
+        
+        # Calculate reward as proportion of tests passed
+        reward = passed / total if total > 0 else 0.0
+        
+        logger.info(f"Completion {i}: {passed}/{total} tests passed, reward={reward:.3f}")
+        return i, reward
+        
+    except Exception as e:
+        logger.error(f"Error processing completion {i}: {e}")
+        return i, None
 
 
 def olmocr_bench_reward(prompts, completions: list[str] | list[list[dict]], completion_ids: list[list[int]], pdf_path: list[str], jsonl_file: list[str], test_ids: list[list[str]], **kwargs):
     """
     Reward function that runs unit tests on completions and returns average pass rate.
+    Uses ThreadPoolExecutor to evaluate completions in parallel.
     
     For each completion, loads the corresponding tests from the JSONL file and runs them.
     Returns the proportion of tests that pass as the reward score.
@@ -208,69 +298,28 @@ def olmocr_bench_reward(prompts, completions: list[str] | list[list[dict]], comp
     """
     logger.info(f"Running olmocr bench reward function for {len(completions)} completions")
     
-    rewards = []
-    
-    # Process each completion with its corresponding metadata
+    # Prepare arguments for parallel processing
+    eval_args = []
     for i, completion in enumerate(completions):
-        # Get the corresponding metadata for this completion
         comp_pdf_path = pdf_path[i] if i < len(pdf_path) else None
         comp_jsonl_file = jsonl_file[i] if i < len(jsonl_file) else None
         comp_test_ids = test_ids[i] if i < len(test_ids) else []
+        eval_args.append((i, completion, comp_jsonl_file, comp_pdf_path, comp_test_ids))
+    
+    # Process completions in parallel using ThreadPoolExecutor
+    rewards = [None] * len(completions)  # Pre-allocate results list
+    
+    # Use number of CPUs for thread pool size, with a reasonable maximum
+    max_workers = min(os.cpu_count() or 4, 16, len(completions))
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks at once
+        futures = [executor.submit(evaluate_single_completion, args) for args in eval_args]
         
-        logger.info(f"Completion {i}: PDF: {comp_pdf_path}, JSONL: {comp_jsonl_file}, Test IDs: {comp_test_ids}")
-        
-        if completion is None or not (isinstance(completion, str) or isinstance(completion, list)):
-            logger.warning(f"Invalid completion at index {i}: {type(completion)}")
-            logger.warning(f"completion: {completion}")
-            rewards.append(None)
-            continue
-        
-        if comp_jsonl_file is None or comp_test_ids is None or len(comp_test_ids) == 0:
-            logger.warning(f"Missing metadata for completion {i}")
-            rewards.append(None)
-            continue
-
-        if isinstance(completion, list):
-            completion = completion[0]["content"]
-        
-        try:
-            # Load all tests from the JSONL file (cached)
-            all_tests = load_tests_cached(comp_jsonl_file)
-            # Filter to only the tests for this specific PDF page
-            relevant_tests = [test for test in all_tests if test.id in comp_test_ids]
-            
-            if not relevant_tests:
-                logger.warning(f"No relevant tests found for test IDs: {comp_test_ids}")
-                rewards.append(None)
-                continue
-            
-            logger.info(f"Found {len(relevant_tests)} relevant tests for completion {i}")
-            
-            # Run all relevant tests on this completion
-            passed = 0
-            total = len(relevant_tests)
-            
-            for test in relevant_tests:
-                try:
-                    test_passed, failure_reason = test.run(completion)
-                    if test_passed:
-                        passed += 1
-                    else:
-                        logger.debug(f"Test {test.id} failed: {failure_reason}")
-                except Exception as e:
-                    logger.warning(f"Error running test {test.id}: {e}")
-                    # Count errored tests as failures
-                    continue
-            
-            # Calculate reward as proportion of tests passed
-            reward = passed / total if total > 0 else 0.0
-            rewards.append(reward)
-            
-            logger.info(f"Completion {i}: {passed}/{total} tests passed, reward={reward:.3f}")
-            
-        except Exception as e:
-            logger.error(f"Error processing completion {i}: {e}")
-            rewards.append(None)
+        # Collect results as they complete (but maintain order)
+        for future in futures:
+            idx, reward = future.result()
+            rewards[idx] = reward
     
     return rewards
 
