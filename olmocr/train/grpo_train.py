@@ -187,8 +187,7 @@ def load_specific_tests_cached(jsonl_file: str, test_ids_tuple: tuple):
         List of test objects matching the specified IDs
     """
     test_ids = set(test_ids_tuple)
-    logger.info(f"Loading {len(test_ids)} specific tests from {jsonl_file}")
-    
+ 
     relevant_tests = []
     with open(jsonl_file, 'r') as f:
         for line in f:
