@@ -13,6 +13,7 @@ from pathlib import Path
 import glob
 from functools import lru_cache
 from concurrent.futures import ThreadPoolExecutor
+from rapidfuzz import distance
 
 import torch
 import numpy as np
@@ -275,6 +276,80 @@ def evaluate_single_completion(args: Tuple[int, Any, str, str, List[str]]) -> Tu
         return i, None
 
 
+def medoid_reward(prompts, completions: list[str] | list[list[dict]], **kwargs):
+    """
+    Reward function based on edit distance to the medoid completion.
+    
+    The medoid is the completion with the minimum average edit distance to all others.
+    Rewards are calculated as 1 - normalized_distance_to_medoid.
+    
+    Args:
+        prompts: List of prompts
+        completions: List of generated completions (model outputs)
+        **kwargs: Additional arguments
+        
+    Returns:
+        List of reward scores between 0 and 1, where medoid gets 1.0
+    """
+    logger.info(f"Running medoid reward function for {len(completions)} completions")
+    
+    # Extract text from completions
+    completion_texts = []
+    for completion in completions:
+        if isinstance(completion, list):
+            text = completion[0]["content"] if completion else ""
+        elif isinstance(completion, str):
+            text = completion
+        else:
+            text = ""
+        completion_texts.append(text)
+    
+    n = len(completion_texts)
+    
+    # Handle edge cases
+    if n == 0:
+        return []
+    if n == 1:
+        return [1.0]
+    
+    # Calculate pairwise edit distances
+    distances = [[0.0] * n for _ in range(n)]
+    max_distance = 0.0
+    
+    for i in range(n):
+        for j in range(i + 1, n):
+            # Calculate Levenshtein distance
+            dist = distance.Levenshtein.distance(completion_texts[i], completion_texts[j])
+            distances[i][j] = dist
+            distances[j][i] = dist
+            max_distance = max(max_distance, dist)
+    
+    # Find the medoid (completion with minimum average distance to others)
+    avg_distances = [sum(distances[i]) / (n - 1) if n > 1 else 0 for i in range(n)]
+    medoid_idx = min(range(n), key=lambda i: avg_distances[i])
+    
+    # Calculate rewards based on distance from medoid
+    rewards = []
+    medoid_distances = distances[medoid_idx]
+    
+    # Normalize distances and compute rewards
+    for i in range(n):
+        if i == medoid_idx:
+            rewards.append(1.0)
+        else:
+            # Normalize distance to [0, 1] range
+            if max_distance > 0:
+                normalized_dist = medoid_distances[i] / max_distance
+            else:
+                normalized_dist = 0.0
+            # Reward is 1 minus normalized distance
+            reward = 1.0 - normalized_dist
+            rewards.append(max(0.0, reward))  # Ensure non-negative
+    
+    logger.info(f"Medoid at index {medoid_idx}, rewards range: [{min(rewards):.3f}, {max(rewards):.3f}]")
+    return rewards
+
+
 def olmocr_bench_reward(prompts, completions: list[str] | list[list[dict]], completion_ids: list[list[int]], pdf_path: list[str], jsonl_file: list[str], test_ids: list[list[str]], **kwargs):
     """
     Reward function that runs unit tests on completions and returns average pass rate.
@@ -436,6 +511,18 @@ def main():
         choices=["token", "sequence"],
         help="Level for importance sampling ratios (default: token)"
     )
+    parser.add_argument(
+        "--reward_bench",
+        action="store_true",
+        default=False,
+        help="Use bench-based reward function (test pass rate)"
+    )
+    parser.add_argument(
+        "--reward_medoid",
+        action="store_true",
+        default=False,
+        help="Use medoid-based reward function (edit distance similarity)"
+    )
     
     args = parser.parse_args()
     
@@ -545,6 +632,23 @@ def main():
         log_completions=True,
     )
     
+    # Build list of reward functions based on command-line arguments
+    reward_funcs = []
+    
+    if args.reward_bench:
+        reward_funcs.append(olmocr_bench_reward)
+        logger.info("Added bench-based reward function")
+    
+    if args.reward_medoid:
+        reward_funcs.append(medoid_reward)
+        logger.info("Added medoid-based reward function")
+    
+    if not reward_funcs:
+        logger.error("No reward function specified. Use at least one of: --reward_bench, --reward_medoid")
+        return
+    
+    logger.info(f"Using {len(reward_funcs)} reward function(s)")
+    
     # Initialize GRPO trainer
     logger.info("Initializing GRPO trainer")
     trainer = GRPOTrainer(
@@ -553,7 +657,7 @@ def main():
         processing_class=processor,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
-        reward_funcs=olmocr_bench_reward,
+        reward_funcs=reward_funcs,
     )
     
     # Start training
@@ -568,9 +672,8 @@ def main():
         
         logger.info("Training completed successfully!")
         
-        # Close wandb if it was used
-        if args.use_wandb:
-            wandb.finish()
+        # Close wandb
+        wandb.finish()
         
     except Exception as e:
         logger.error(f"Training failed: {e}")
