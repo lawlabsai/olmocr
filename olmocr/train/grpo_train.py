@@ -716,39 +716,6 @@ def main():
         logger.warning("No samples found in evaluation dataset, using training dataset for eval")
         eval_dataset = train_dataset
     
-    # Set up GRPO configuration
-    grpo_config = GRPOConfig(
-        output_dir=args.output_dir,
-        num_train_epochs=args.num_train_epochs,
-        per_device_train_batch_size=args.per_device_train_batch_size,
-        per_device_eval_batch_size=args.per_device_eval_batch_size,
-        gradient_accumulation_steps=args.gradient_accumulation_steps,
-        learning_rate=args.learning_rate,
-        logging_steps=10,
-        save_steps=100,
-        eval_steps=50,
-        warmup_steps=10,
-        max_prompt_length=3000,
-        max_completion_length=3000,
-        temperature=0.7,
-        report_to=report_to,
-        remove_unused_columns=False,
-        bf16=True,
-        dataloader_num_workers=0,
-        
-        # GRPO-specific parameters
-        loss_type=args.loss_type,
-        scale_rewards=args.scale_rewards,
-        beta=args.beta,
-        importance_sampling_level=args.importance_sampling_level,
-
-        # Vllm setup to speed up generation
-        use_vllm=True,
-        vllm_mode="colocate",
-        vllm_gpu_memory_utilization=0.15,
-        log_completions=True,
-    )
-    
     # Build list of reward functions and weights based on command-line arguments
     reward_funcs = []
     reward_weights = []
@@ -783,6 +750,40 @@ def main():
     for name, weight in zip(reward_names, reward_weights):
         logger.info(f"  - {name}: weight={weight}")
     logger.info("="*50 + "\n")
+
+    # Set up GRPO configuration
+    grpo_config = GRPOConfig(
+        output_dir=args.output_dir,
+        num_train_epochs=args.num_train_epochs,
+        per_device_train_batch_size=args.per_device_train_batch_size,
+        per_device_eval_batch_size=args.per_device_eval_batch_size,
+        gradient_accumulation_steps=args.gradient_accumulation_steps,
+        learning_rate=args.learning_rate,
+        logging_steps=10,
+        save_steps=100,
+        eval_steps=50,
+        warmup_steps=10,
+        max_prompt_length=3000,
+        max_completion_length=3000,
+        temperature=0.7,
+        report_to=report_to,
+        remove_unused_columns=False,
+        bf16=True,
+        dataloader_num_workers=0,
+        
+        # GRPO-specific parameters
+        loss_type=args.loss_type,
+        scale_rewards=args.scale_rewards,
+        beta=args.beta,
+        importance_sampling_level=args.importance_sampling_level,
+        reward_weights=reward_weights,
+
+        # Vllm setup to speed up generation
+        use_vllm=True,
+        vllm_mode="colocate",
+        vllm_gpu_memory_utilization=0.15,
+        log_completions=True,
+    )
     
     # Initialize GRPO trainer
     logger.info("Initializing GRPO trainer")
@@ -793,7 +794,6 @@ def main():
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         reward_funcs=reward_funcs,
-        reward_weights=reward_weights,
     )
     
     # Start training
