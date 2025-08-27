@@ -472,52 +472,103 @@ def medoid_reward(prompts, completions: list[str] | list[list[dict]], **kwargs):
     return rewards
 
 
-def reward_format(prompts, completions: list[str] | list[list[dict]], **kwargs):
+def reward_front_matter(prompts, completions: list[str] | list[list[dict]], claude_original: list[Optional[str]] = None, **kwargs):
     """
-    Reward function that checks if completions can be successfully parsed by FrontMatterParser.
+    Reward function that checks if completions can be successfully parsed by FrontMatterParser
+    and compares fields to claude_original values.
     
-    Returns 1.0 if the completion can be parsed without errors, 0.0 otherwise.
-    This ensures the model generates properly formatted YAML front matter that can be
-    parsed into a PageResponse object.
+    Scoring:
+    - 0.0: Cannot parse frontmatter at all
+    - 0.5: Can parse frontmatter successfully
+    - +0.1: For each matching field (primary_language, is_rotation_valid, 
+            rotation_correction, is_table, is_diagram)
+    
+    Maximum score: 1.0 (0.5 + 5 * 0.1)
     
     Args:
         prompts: List of prompts
         completions: List of generated completions (model outputs)
+        claude_original: List of claude_original markdown content (optional)
         **kwargs: Additional arguments
         
     Returns:
-        List of reward scores: 1.0 for successful parsing, 0.0 for errors
+        List of reward scores between 0.0 and 1.0
     """
-    logger.info(f"Running format reward function for {len(completions)} completions")
+    logger.info(f"Running front matter reward function for {len(completions)} completions")
     
     rewards = []
     parser = FrontMatterParser(front_matter_class=PageResponse)
     
+    # Fields to compare
+    fields_to_compare = ['primary_language', 'is_rotation_valid', 'rotation_correction', 
+                         'is_table', 'is_diagram']
+    
     for i, completion in enumerate(completions):
         # Extract text from completion
         if isinstance(completion, list):
-            model_response_markdown = completion[0]["content"] if completion else ""
+            if completion and "content" in completion[0]:
+                model_response_markdown = completion[0]["content"]
+            else:
+                model_response_markdown = ""
         elif isinstance(completion, str):
             model_response_markdown = completion
         else:
             model_response_markdown = ""
         
+        reward = 0.0
+        
         try:
-            # Try to parse the completion using the same logic as in pipeline.py
+            # Try to parse the completion
             front_matter, text = parser._extract_front_matter_and_text(model_response_markdown)
-            page_response = parser._parse_front_matter(front_matter, text)
+            completion_response = parser._parse_front_matter(front_matter, text)
             
-            # If we get here without exception, parsing succeeded
-            rewards.append(1.0)
-            logger.debug(f"Completion {i}: Successfully parsed format")
+            # Parsing succeeded - base reward of 0.5
+            reward = 0.5
+            logger.debug(f"Completion {i}: Successfully parsed frontmatter (base reward: 0.5)")
+            
+            # Try to compare with claude_original if available
+            if claude_original and i < len(claude_original) and claude_original[i]:
+                try:
+                    # Parse claude_original frontmatter
+                    claude_fm, claude_text = parser._extract_front_matter_and_text(claude_original[i])
+                    claude_response = parser._parse_front_matter(claude_fm, claude_text)
+                    
+                    # Compare each field
+                    fields_matched = 0
+                    for field in fields_to_compare:
+                        completion_value = getattr(completion_response, field, None)
+                        claude_value = getattr(claude_response, field, None)
+                        
+                        if completion_value == claude_value:
+                            fields_matched += 1
+                            reward += 0.1
+                            logger.debug(f"  Field {field} matches: {completion_value}")
+                        else:
+                            logger.debug(f"  Field {field} mismatch: completion={completion_value}, claude={claude_value}")
+                    
+                    logger.debug(f"Completion {i}: Matched {fields_matched}/{len(fields_to_compare)} fields")
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to parse claude_original for comparison at index {i}: {e}")
+                    # Keep the base 0.5 reward for successful parsing
+            else:
+                logger.debug(f"Completion {i}: No claude_original available for comparison")
             
         except Exception as e:
             # Any parsing error results in 0 reward
-            rewards.append(0.0)
-            logger.debug(f"Completion {i}: Failed to parse format - {type(e).__name__}: {str(e)}")
+            reward = 0.0
+            logger.debug(f"Completion {i}: Failed to parse frontmatter - {type(e).__name__}: {str(e)}")
+        
+        rewards.append(reward)
     
-    success_count = sum(1 for r in rewards if r == 1.0)
-    logger.info(f"Format rewards: {success_count}/{len(rewards)} successfully parsed")
+    # Log summary statistics
+    zero_rewards = sum(1 for r in rewards if r == 0.0)
+    partial_rewards = sum(1 for r in rewards if 0.0 < r < 1.0)
+    perfect_rewards = sum(1 for r in rewards if r == 1.0)
+    avg_reward = sum(rewards) / len(rewards) if rewards else 0.0
+    
+    logger.info(f"Front matter rewards summary: {zero_rewards} failed, {partial_rewards} partial, "
+                f"{perfect_rewards} perfect. Average: {avg_reward:.3f}")
     
     return rewards
 
@@ -708,12 +759,12 @@ def main():
         help="Use bench edit distance reward with optional weight (default: 1.0)"
     )
     parser.add_argument(
-        "--reward_format",
+        "--reward_front_matter",
         nargs='?',
         const=1.0,
         type=float,
         default=None,
-        help="Use format validation reward with optional weight (default: 1.0)"
+        help="Use front matter validation and field matching reward with optional weight (default: 1.0)"
     )
     
     args = parser.parse_args()
@@ -814,14 +865,14 @@ def main():
         reward_names.append("bench_edit_distance")
         logger.info(f"Added bench edit distance reward function with weight {args.reward_bench_edit_distance}")
     
-    if args.reward_format is not None:
-        reward_funcs.append(reward_format)
-        reward_weights.append(args.reward_format)
-        reward_names.append("format")
-        logger.info(f"Added format validation reward function with weight {args.reward_format}")
+    if args.reward_front_matter is not None:
+        reward_funcs.append(reward_front_matter)
+        reward_weights.append(args.reward_front_matter)
+        reward_names.append("front_matter")
+        logger.info(f"Added front matter validation reward function with weight {args.reward_front_matter}")
     
     if not reward_funcs:
-        logger.error("No reward function specified. Use at least one of: --reward_bench, --reward_medoid, --reward_bench_edit_distance, --reward_format")
+        logger.error("No reward function specified. Use at least one of: --reward_bench, --reward_medoid, --reward_bench_edit_distance, --reward_front_matter")
         return
     
     # Log summary of reward configuration

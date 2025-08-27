@@ -10,13 +10,13 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, mock_open
 import shutil
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from olmocr.train.grpo_train import OlmOCRBenchDataset, olmocr_bench_reward, load_tests_cached
+from olmocr.train.grpo_train import OlmOCRBenchDataset, olmocr_bench_reward, load_specific_tests_cached, reward_front_matter
 
 
 class TestGRPODataloader(unittest.TestCase):
@@ -265,7 +265,7 @@ class TestOlmOCRBenchReward(unittest.TestCase):
     def setUpClass(cls):
         """Create temporary test files."""
         # Clear any cached tests from previous runs
-        load_tests_cached.cache_clear()
+        load_specific_tests_cached.cache_clear()
         cls.temp_dir = tempfile.mkdtemp()
         
         # Create a sample JSONL test file with different test types
@@ -313,12 +313,12 @@ class TestOlmOCRBenchReward(unittest.TestCase):
     def tearDownClass(cls):
         """Clean up temporary files."""
         # Clear the LRU cache before removing temp dir
-        load_tests_cached.cache_clear()
+        load_specific_tests_cached.cache_clear()
         shutil.rmtree(cls.temp_dir)
     
     def setUp(self):
         """Clear cache before each test method."""
-        load_tests_cached.cache_clear()
+        load_specific_tests_cached.cache_clear()
     
     def test_perfect_completion(self):
         """Test reward calculation for a completion that passes all tests."""
@@ -421,22 +421,33 @@ class TestOlmOCRBenchReward(unittest.TestCase):
         self.assertEqual(rewards[2], 1.0)
     
     def test_cache_functionality(self):
-        """Test that load_tests_cached properly caches results."""
+        """Test that load_specific_tests_cached properly caches results."""
         # Clear cache first
-        load_tests_cached.cache_clear()
+        load_specific_tests_cached.cache_clear()
         
-        # First call should load from file
-        with patch('olmocr.train.grpo_train.load_tests') as mock_load:
-            mock_load.return_value = []
-            result1 = load_tests_cached(self.jsonl_path)
-            self.assertEqual(mock_load.call_count, 1)
+        # Test that the cache works by calling the function twice
+        test_ids = ("test1", "test2")
+        
+        # First call loads from file
+        with patch('builtins.open', create=True) as mock_open:
+            mock_file = MagicMock()
+            mock_file.__enter__.return_value = iter([
+                '{"id": "test1", "type": "present", "text": "hello", "pdf": "test.pdf", "page": 0}\n',
+                '{"id": "test2", "type": "absent", "text": "world", "pdf": "test.pdf", "page": 0}\n',
+                '{"id": "test3", "type": "present", "text": "foo", "pdf": "test.pdf", "page": 0}\n',
+            ])
+            mock_open.return_value = mock_file
             
-            # Second call should use cache
-            result2 = load_tests_cached(self.jsonl_path)
-            self.assertEqual(mock_load.call_count, 1)  # Should not increase
+            result1 = load_specific_tests_cached(self.jsonl_path, test_ids)
+            self.assertEqual(mock_open.call_count, 1)
+            
+            # Second call should use cache, not open file again
+            result2 = load_specific_tests_cached(self.jsonl_path, test_ids)
+            self.assertEqual(mock_open.call_count, 1)  # Should not increase
             
             # Results should be the same
             self.assertEqual(result1, result2)
+            self.assertEqual(len(result1), 2)  # Should have loaded 2 tests
     
     def test_error_handling(self):
         """Test error handling in reward function."""
@@ -453,6 +464,313 @@ class TestOlmOCRBenchReward(unittest.TestCase):
         # Should return None on error
         self.assertEqual(len(rewards), 1)
         self.assertIsNone(rewards[0])
+
+
+class TestRewardFrontMatter(unittest.TestCase):
+    """Test cases for the reward_front_matter function."""
+    
+    def test_no_frontmatter(self):
+        """Test that completions without frontmatter get 0.0 reward."""
+        completions = [
+            "This is just text without any frontmatter",
+            "Another completion with no YAML",
+            "# A markdown header but no frontmatter"
+        ]
+        
+        rewards = reward_front_matter(
+            prompts=["prompt"] * 3,
+            completions=completions,
+            claude_original=None
+        )
+        
+        self.assertEqual(len(rewards), 3)
+        for reward in rewards:
+            self.assertEqual(reward, 0.0)
+    
+    def test_valid_frontmatter_no_claude(self):
+        """Test that valid frontmatter gets 0.5 reward when no claude_original."""
+        completions = [
+            """---
+primary_language: en
+is_rotation_valid: True
+rotation_correction: 0
+is_table: False
+is_diagram: False
+---
+
+# Document content here""",
+            """---
+primary_language: fr
+is_rotation_valid: False
+rotation_correction: 90
+is_table: True
+is_diagram: False
+---
+
+Some other content"""
+        ]
+        
+        rewards = reward_front_matter(
+            prompts=["prompt"] * 2,
+            completions=completions,
+            claude_original=None
+        )
+        
+        self.assertEqual(len(rewards), 2)
+        for reward in rewards:
+            self.assertEqual(reward, 0.5)
+    
+    def test_perfect_match_with_claude(self):
+        """Test perfect match with claude_original gets 1.0 reward."""
+        claude_original_content = """---
+primary_language: en
+is_rotation_valid: True
+rotation_correction: 0
+is_table: False
+is_diagram: False
+---
+
+Original content"""
+        
+        completion = """---
+primary_language: en
+is_rotation_valid: True
+rotation_correction: 0
+is_table: False
+is_diagram: False
+---
+
+Different content but same frontmatter"""
+        
+        rewards = reward_front_matter(
+            prompts=["prompt"],
+            completions=[completion],
+            claude_original=[claude_original_content]
+        )
+        
+        self.assertEqual(len(rewards), 1)
+        self.assertAlmostEqual(rewards[0], 1.0, places=5)
+    
+    def test_partial_match_with_claude(self):
+        """Test partial match with claude_original gets intermediate reward."""
+        claude_original_content = """---
+primary_language: en
+is_rotation_valid: True
+rotation_correction: 0
+is_table: False
+is_diagram: False
+---
+
+Original content"""
+        
+        # 3 out of 5 fields match
+        completion = """---
+primary_language: en
+is_rotation_valid: False
+rotation_correction: 90
+is_table: False
+is_diagram: False
+---
+
+Different values for rotation fields"""
+        
+        rewards = reward_front_matter(
+            prompts=["prompt"],
+            completions=[completion],
+            claude_original=[claude_original_content]
+        )
+        
+        self.assertEqual(len(rewards), 1)
+        # 0.5 base + 3 * 0.1 = 0.8
+        self.assertAlmostEqual(rewards[0], 0.8, places=2)
+    
+    def test_invalid_frontmatter_format(self):
+        """Test that invalid YAML frontmatter gets 0.0 reward."""
+        completions = [
+            """---
+this is not: valid yaml
+  because of: : bad formatting
+---
+content""",
+            """---
+primary_language: en
+unclosed_string: "this is not closed
+---""",
+            """---
+primary_language:
+  nested: "should not be nested"
+---"""
+        ]
+        
+        rewards = reward_front_matter(
+            prompts=["prompt"] * 3,
+            completions=completions,
+            claude_original=None
+        )
+        
+        self.assertEqual(len(rewards), 3)
+        for reward in rewards:
+            self.assertEqual(reward, 0.0)
+    
+    def test_mixed_completions_with_claude(self):
+        """Test mixed completions with claude_original comparisons."""
+        claude_originals = [
+            """---
+primary_language: en
+is_rotation_valid: True
+rotation_correction: 0
+is_table: False
+is_diagram: False
+---
+Content 1""",
+            None,  # No claude_original for this one
+            """---
+primary_language: fr
+is_rotation_valid: False
+rotation_correction: 180
+is_table: True
+is_diagram: True
+---
+Content 3"""
+        ]
+        
+        completions = [
+            # Perfect match with first claude
+            """---
+primary_language: en
+is_rotation_valid: True
+rotation_correction: 0
+is_table: False
+is_diagram: False
+---
+Model output 1""",
+            # Valid frontmatter but no claude to compare
+            """---
+primary_language: de
+is_rotation_valid: True
+rotation_correction: 0
+is_table: False
+is_diagram: False
+---
+Model output 2""",
+            # No frontmatter at all
+            "Just plain text without frontmatter"
+        ]
+        
+        rewards = reward_front_matter(
+            prompts=["prompt"] * 3,
+            completions=completions,
+            claude_original=claude_originals
+        )
+        
+        self.assertEqual(len(rewards), 3)
+        self.assertAlmostEqual(rewards[0], 1.0, places=5)  # Perfect match
+        self.assertEqual(rewards[1], 0.5)  # Valid but no claude
+        self.assertEqual(rewards[2], 0.0)  # No frontmatter
+    
+    def test_list_format_completions(self):
+        """Test handling of completions in list format."""
+        completion_content = """---
+primary_language: en
+is_rotation_valid: True
+rotation_correction: 0
+is_table: False
+is_diagram: False
+---
+Content"""
+        
+        completions = [
+            # List format (as from model output)
+            [{"content": completion_content}],
+            # String format
+            completion_content,
+            # Empty list
+            [],
+            # Invalid format
+            [{}]
+        ]
+        
+        rewards = reward_front_matter(
+            prompts=["prompt"] * 4,
+            completions=completions,
+            claude_original=None
+        )
+        
+        self.assertEqual(len(rewards), 4)
+        self.assertEqual(rewards[0], 0.5)  # Valid from list
+        self.assertEqual(rewards[1], 0.5)  # Valid from string
+        self.assertEqual(rewards[2], 0.0)  # Empty list
+        self.assertEqual(rewards[3], 0.0)  # Invalid list format
+    
+    def test_field_type_matching(self):
+        """Test that field types are correctly compared."""
+        claude_original = """---
+primary_language: en
+is_rotation_valid: True
+rotation_correction: 0
+is_table: False
+is_diagram: False
+---"""
+        
+        completions = [
+            # Correct types
+            """---
+primary_language: en
+is_rotation_valid: True
+rotation_correction: 0
+is_table: False
+is_diagram: False
+---""",
+            # String instead of boolean (might still parse correctly)
+            """---
+primary_language: en
+is_rotation_valid: "True"
+rotation_correction: "0"
+is_table: "False"
+is_diagram: "False"
+---""",
+        ]
+        
+        rewards = reward_front_matter(
+            prompts=["prompt"] * 2,
+            completions=completions,
+            claude_original=[claude_original] * 2
+        )
+        
+        self.assertEqual(len(rewards), 2)
+        # First should be perfect match
+        self.assertAlmostEqual(rewards[0], 1.0, places=5)
+        # Second: YAML parses string "True" as True boolean, so both should match
+        self.assertAlmostEqual(rewards[1], 1.0, places=5)
+    
+    def test_none_values_in_fields(self):
+        """Test handling of None values in frontmatter fields."""
+        claude_original = """---
+primary_language: en
+is_rotation_valid: True
+rotation_correction: 0
+is_table: False
+is_diagram: False
+---"""
+        
+        # rotation_correction null will fail validation (must be 0, 90, 180, or 270)
+        completion = """---
+primary_language: en
+is_rotation_valid: True
+rotation_correction: null
+is_table: False
+is_diagram: False
+---"""
+        
+        rewards = reward_front_matter(
+            prompts=["prompt"],
+            completions=[completion],
+            claude_original=[claude_original]
+        )
+        
+        self.assertEqual(len(rewards), 1)
+        # Should fail to parse due to invalid rotation_correction
+        self.assertEqual(rewards[0], 0.0)
 
 
 class TestIntegrationWithRealData(unittest.TestCase):
