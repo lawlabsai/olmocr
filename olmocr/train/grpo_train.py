@@ -14,6 +14,7 @@ import glob
 from functools import lru_cache
 from concurrent.futures import ThreadPoolExecutor
 from rapidfuzz import distance
+import sys
 
 import torch
 import numpy as np
@@ -108,7 +109,21 @@ class OlmOCRBenchDataset(Dataset):
         if os.path.exists(claude_file_path):
             try:
                 with open(claude_file_path, 'r', encoding='utf-8') as f:
-                    return f.read()
+                    content = f.read()
+                    
+                # Parse the frontmatter to validate the content
+                parser = FrontMatterParser(front_matter_class=PageResponse)
+                try:
+                    front_matter, text = parser._extract_front_matter_and_text(content)
+                    page_response = parser._parse_front_matter(front_matter, text)
+                    # Parsing succeeded, return the original content
+                    return content
+                except Exception as parse_error:
+                    logger.error(f"CRITICAL: Failed to parse frontmatter from claude_original file {claude_file_path}")
+                    logger.error(f"Parse error: {type(parse_error).__name__}: {str(parse_error)}")
+                    logger.error("Aborting run due to invalid claude_original file format")
+                    sys.exit(1)
+                    
             except Exception as e:
                 logger.warning(f"Failed to read claude_original file {claude_file_path}: {e}")
         else:
