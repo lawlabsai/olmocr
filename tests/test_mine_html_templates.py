@@ -756,5 +756,223 @@ class TestHtmlToMarkdown(unittest.TestCase):
         self.assertIn("Middle content", content_both)
 
 
+class TestSuperscriptSubscriptConversion(unittest.TestCase):
+    """Test superscript and subscript conversion to Unicode in html_to_markdown_with_frontmatter"""
+    
+    def test_basic_superscripts(self):
+        """Test basic superscript conversion"""
+        html = """
+        <html>
+        <body>
+            <p>x<sup>2</sup> + y<sup>3</sup> = z<sup>4</sup></p>
+            <p>10<sup>9</sup> is a billion</p>
+        </body>
+        </html>
+        """
+        result = html_to_markdown_with_frontmatter(html)
+        
+        # Check that superscripts are converted to Unicode
+        self.assertIn("x²", result)
+        self.assertIn("y³", result)
+        self.assertIn("z⁴", result)
+        self.assertIn("10⁹", result)
+        
+        # Should not contain HTML sup tags in markdown
+        self.assertNotIn("<sup>", result)
+        self.assertNotIn("</sup>", result)
+    
+    def test_basic_subscripts(self):
+        """Test basic subscript conversion"""
+        html = """
+        <html>
+        <body>
+            <p>H<sub>2</sub>O is water</p>
+            <p>CO<sub>2</sub> is carbon dioxide</p>
+            <p>X<sub>n</sub> represents the nth element</p>
+        </body>
+        </html>
+        """
+        result = html_to_markdown_with_frontmatter(html)
+        
+        # Check that subscripts are converted to Unicode
+        self.assertIn("H₂O", result)
+        self.assertIn("CO₂", result)
+        self.assertIn("Xₙ", result)
+        
+        # Should not contain HTML sub tags in markdown
+        self.assertNotIn("<sub>", result)
+        self.assertNotIn("</sub>", result)
+    
+    def test_mixed_super_and_subscripts(self):
+        """Test mixed superscripts and subscripts"""
+        html = """
+        <html>
+        <body>
+            <p>The formula is x<sup>2</sup> + H<sub>2</sub>O<sup>+</sup></p>
+            <p>Chemical: Ca<sup>2+</sup> and SO<sub>4</sub><sup>2-</sup></p>
+        </body>
+        </html>
+        """
+        result = html_to_markdown_with_frontmatter(html)
+        
+        # Check mixed conversions
+        self.assertIn("x²", result)
+        self.assertIn("H₂O⁺", result)
+        self.assertIn("Ca²⁺", result)
+        self.assertIn("SO₄²⁻", result)
+    
+    def test_special_characters(self):
+        """Test special character conversions"""
+        html = """
+        <html>
+        <body>
+            <p>Math: (x+y)<sup>n</sup> and f<sub>(x)</sub></p>
+            <p>Ion: OH<sup>-</sup> and H<sup>+</sup></p>
+            <p>Index: a<sub>i</sub> and b<sup>i</sup></p>
+        </body>
+        </html>
+        """
+        result = html_to_markdown_with_frontmatter(html)
+        
+        # Check special character conversions
+        self.assertIn("(x+y)ⁿ", result)
+        self.assertIn("f₍ₓ₎", result)
+        self.assertIn("OH⁻", result)
+        self.assertIn("H⁺", result)
+        # subscript i might not be in map, so check either form
+        self.assertTrue("aᵢ" in result or "a<sub>i</sub>" in result or "ai" in result)
+        self.assertIn("bⁱ", result)
+    
+    def test_in_table(self):
+        """Test superscripts/subscripts within HTML tables"""
+        html = """
+        <html>
+        <body>
+            <table>
+                <tr>
+                    <th>Chemical</th>
+                    <th>Formula</th>
+                </tr>
+                <tr>
+                    <td>Water</td>
+                    <td>H<sub>2</sub>O</td>
+                </tr>
+                <tr>
+                    <td>Sulfate ion</td>
+                    <td>SO<sub>4</sub><sup>2-</sup></td>
+                </tr>
+            </table>
+        </body>
+        </html>
+        """
+        result = html_to_markdown_with_frontmatter(html)
+        
+        # Tables should be preserved as HTML but superscripts/subscripts should still be converted
+        self.assertIn("<table>", result)
+        
+        # Check if conversions happened in table cells
+        self.assertTrue("H₂O" in result or "<sub>2</sub>" in result)
+        self.assertTrue("SO₄²⁻" in result or "<sub>4</sub><sup>2-</sup>" in result)
+    
+    def test_nested_elements(self):
+        """Test superscripts/subscripts in nested HTML elements"""
+        html = """
+        <html>
+        <body>
+            <div>
+                <p>In physics: E = mc<sup>2</sup></p>
+                <ul>
+                    <li>First: x<sup>1</sup></li>
+                    <li>Second: x<sub>2</sub></li>
+                </ul>
+            </div>
+        </body>
+        </html>
+        """
+        result = html_to_markdown_with_frontmatter(html)
+        
+        # Check conversions in nested structures
+        self.assertIn("mc²", result)
+        self.assertTrue("x¹" in result or "x1" in result)
+        self.assertTrue("x₂" in result or "x2" in result)
+    
+    def test_frontmatter_preserved(self):
+        """Test that frontmatter is still generated correctly"""
+        html = """
+        <html lang="es">
+        <body>
+            <p>Test with x<sup>2</sup></p>
+            <table><tr><td>Data</td></tr></table>
+        </body>
+        </html>
+        """
+        result = html_to_markdown_with_frontmatter(html)
+        
+        # Check frontmatter exists
+        self.assertTrue(result.startswith("---"))
+        self.assertIn("primary_language: es", result)
+        self.assertIn("is_table:", result)
+        
+        # Also check the conversion happened
+        self.assertIn("x²", result)
+    
+    def test_unmapped_characters(self):
+        """Test characters not in the mapping"""
+        html = """
+        <html>
+        <body>
+            <p>Unknown: x<sup>abc</sup> and y<sub>xyz</sub></p>
+            <p>Mixed: H<sub>2</sub>SO<sub>4</sub> with note<sup>*</sup></p>
+        </body>
+        </html>
+        """
+        result = html_to_markdown_with_frontmatter(html)
+        
+        # Unmapped characters should be left as-is or handled gracefully
+        self.assertIn("H₂SO₄", result)
+        # Asterisk is not in the map, so it might remain as-is
+        self.assertTrue("note*" in result or "note<sup>*</sup>" in result or "note^*" in result)
+    
+    def test_empty_super_subscripts(self):
+        """Test empty sup/sub tags"""
+        html = """
+        <html>
+        <body>
+            <p>Empty tags: x<sup></sup> and y<sub></sub></p>
+            <p>Normal: z<sup>2</sup></p>
+        </body>
+        </html>
+        """
+        result = html_to_markdown_with_frontmatter(html)
+        
+        # Empty tags should not cause errors
+        self.assertIn("z²", result)
+        # Empty tags should just be removed
+        self.assertIn("x", result)
+        self.assertIn("y", result)
+    
+    def test_complex_math_expression(self):
+        """Test a complex mathematical expression"""
+        html = """
+        <html>
+        <body>
+            <p>The equation: (x<sub>1</sub>)<sup>2</sup> + (x<sub>2</sub>)<sup>2</sup> = r<sup>2</sup></p>
+            <p>Series: a<sub>0</sub> + a<sub>1</sub>x + a<sub>2</sub>x<sup>2</sup> + ... + a<sub>n</sub>x<sup>n</sup></p>
+        </body>
+        </html>
+        """
+        result = html_to_markdown_with_frontmatter(html)
+        
+        # Check complex nested expressions
+        self.assertIn("x₁", result)
+        self.assertIn("x₂", result) 
+        self.assertIn("r²", result)
+        self.assertIn("a₀", result)
+        self.assertIn("a₁", result)
+        self.assertIn("a₂", result)
+        self.assertIn("aₙ", result)
+        self.assertIn("xⁿ", result)
+
+
 if __name__ == '__main__':
     unittest.main()

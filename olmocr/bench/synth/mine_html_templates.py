@@ -26,6 +26,61 @@ from olmocr.data.renderpdf import (
 from olmocr.filter.filter import PdfFilter, Language
 
 
+# Unicode mappings for superscript characters
+SUPERSCRIPT_MAP = {
+    "0": "⁰", "1": "¹", "2": "²", "3": "³", "4": "⁴",
+    "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹",
+    "+": "⁺", "-": "⁻", "=": "⁼", "(": "⁽", ")": "⁾",
+    "n": "ⁿ", "i": "ⁱ"
+}
+
+# Unicode mappings for subscript characters
+SUBSCRIPT_MAP = {
+    "0": "₀", "1": "₁", "2": "₂", "3": "₃", "4": "₄",
+    "5": "₅", "6": "₆", "7": "₇", "8": "₈", "9": "₉",
+    "+": "₊", "-": "₋", "=": "₌", "(": "₍", ")": "₎",
+    "a": "ₐ", "e": "ₑ", "o": "ₒ", "x": "ₓ", "h": "ₕ",
+    "k": "ₖ", "l": "ₗ", "m": "ₘ", "n": "ₙ", "p": "ₚ",
+    "s": "ₛ", "t": "ₜ"
+}
+
+
+def convert_superscripts_subscripts(element):
+    """
+    Convert HTML superscript and subscript tags to Unicode equivalents.
+    
+    This function finds all <sup> and <sub> tags in the given element and
+    replaces them with their Unicode character equivalents. Characters not
+    in the mapping are left unchanged.
+    
+    Args:
+        element: A BeautifulSoup element to process
+        
+    Returns:
+        The element with sup/sub tags converted to Unicode
+    """
+    if not element:
+        return element
+    
+    # Process all superscript tags
+    for sup in element.find_all("sup"):
+        sup_text = sup.get_text()
+        unicode_text = "".join(
+            SUPERSCRIPT_MAP.get(char, char) for char in sup_text
+        )
+        sup.replace_with(unicode_text)
+    
+    # Process all subscript tags
+    for sub in element.find_all("sub"):
+        sub_text = sub.get_text()
+        unicode_text = "".join(
+            SUBSCRIPT_MAP.get(char, char) for char in sub_text
+        )
+        sub.replace_with(unicode_text)
+    
+    return element
+
+
 def download_s3_pdf(path, local_path):
     """Download a PDF from S3 or copy from local path."""
     os.makedirs(os.path.dirname(local_path), exist_ok=True)
@@ -166,6 +221,9 @@ def html_to_markdown_with_frontmatter(html_content):
         # Create an img tag with placeholder src and appropriate alt text
         img_tag = body_soup.new_tag('img', src='page.png', alt=alt_text)
         img_div.replace_with(img_tag)
+    
+    # Convert superscripts and subscripts to Unicode before markdown conversion
+    convert_superscripts_subscripts(body_soup)
     
     # Get the modified HTML (only body content)
     modified_html = str(body_soup)
@@ -454,77 +512,7 @@ def generate_tests_from_html(html_content: str, pdf_id: str, page_num: int, verb
         A list of test dictionaries that can be saved as JSONL
     """
 
-    # Helper function to convert superscripts and subscripts to Unicode
-    def convert_superscripts_subscripts(element):
-        # Map for superscript characters
-        superscript_map = {
-            "0": "⁰",
-            "1": "¹",
-            "2": "²",
-            "3": "³",
-            "4": "⁴",
-            "5": "⁵",
-            "6": "⁶",
-            "7": "⁷",
-            "8": "⁸",
-            "9": "⁹",
-            "+": "⁺",
-            "-": "⁻",
-            "=": "⁼",
-            "(": "⁽",
-            ")": "⁾",
-            "n": "ⁿ",
-            "i": "ⁱ",
-        }
-
-        # Map for subscript characters
-        subscript_map = {
-            "0": "₀",
-            "1": "₁",
-            "2": "₂",
-            "3": "₃",
-            "4": "₄",
-            "5": "₅",
-            "6": "₆",
-            "7": "₇",
-            "8": "₈",
-            "9": "₉",
-            "+": "₊",
-            "-": "₋",
-            "=": "₌",
-            "(": "₍",
-            ")": "₎",
-            "a": "ₐ",
-            "e": "ₑ",
-            "o": "ₒ",
-            "x": "ₓ",
-            "h": "ₕ",
-            "k": "ₖ",
-            "l": "ₗ",
-            "m": "ₘ",
-            "n": "ₙ",
-            "p": "ₚ",
-            "s": "ₛ",
-            "t": "ₜ",
-        }
-
-        # Process all superscript tags
-        for sup in element.find_all("sup"):
-            sup_text = sup.get_text()
-            unicode_text = ""
-            for char in sup_text:
-                unicode_text += superscript_map.get(char, char)
-            sup.replace_with(unicode_text)
-
-        # Process all subscript tags
-        for sub in element.find_all("sub"):
-            sub_text = sub.get_text()
-            unicode_text = ""
-            for char in sub_text:
-                unicode_text += subscript_map.get(char, char)
-            sub.replace_with(unicode_text)
-
-        return element
+    # Use the module-level conversion function
 
     tests = []
     pdf_filename = f"{pdf_id}_page{page_num}.pdf"
