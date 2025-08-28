@@ -12,10 +12,12 @@ import argparse
 import requests
 import img2pdf
 from pathlib import Path
-from typing import List, Dict, Set
+from typing import List, Dict, Set, Tuple, Optional
 from tqdm import tqdm
 import time
 import hashlib
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
 
 def fix_image_url(url: str) -> str:
@@ -109,117 +111,177 @@ def scan_existing_outputs(output_dir: Path) -> Set[str]:
     return processed_assets
 
 
-def process_csv_file(csv_path: Path, output_dir: Path, processed_assets: Set[str], skip_cleanup: bool = True) -> None:
-    """Process a single CSV file containing LOC transcription data."""
+def process_single_item(
+    row: Dict[str, str], 
+    dataset_output_dir: Path,
+    skip_cleanup: bool,
+    processed_lock: threading.Lock,
+    processed_assets: Set[str]
+) -> Tuple[str, bool, Optional[str]]:
+    """Process a single row/item from the CSV. Returns (asset, success, error_msg)."""
+    
+    # Check required fields (Transcription can be empty)
+    if not all(key in row for key in ['Asset', 'DownloadUrl']):
+        return ('', False, 'Missing required fields')
+    
+    asset = row['Asset']
+    download_url = row['DownloadUrl']
+    transcription = row.get('Transcription', '')  # Allow empty transcription
+    
+    if not asset or not download_url:
+        return (asset, False, 'Empty required fields (Asset or DownloadUrl)')
+    
+    # Create safe filename using Asset column
+    safe_filename = get_safe_filename(asset)
+    
+    # Check if already processed (thread-safe)
+    with processed_lock:
+        if safe_filename in processed_assets:
+            return (asset, True, None)
+    
+    # Define output paths
+    pdf_path = dataset_output_dir / f"{safe_filename}.pdf"
+    md_path = dataset_output_dir / f"{safe_filename}.md"
+    
+    # Double-check if files already exist on disk
+    if pdf_path.exists() and md_path.exists():
+        # Verify files are not empty
+        if pdf_path.stat().st_size > 0 and md_path.stat().st_size > 0:
+            with processed_lock:
+                processed_assets.add(safe_filename)
+            return (asset, True, None)
+        else:
+            # Remove empty files to reprocess
+            pdf_path.unlink(missing_ok=True)
+            md_path.unlink(missing_ok=True)
+    
+    # Process the item
+    temp_dir = dataset_output_dir / 'temp'
+    temp_dir.mkdir(exist_ok=True)
+    
+    try:
+        # Download image with unique temp filename to avoid collisions
+        image_path = temp_dir / f"{safe_filename}_{threading.current_thread().ident}.jpg"
+        
+        if not download_image(download_url, image_path):
+            raise Exception(f"Failed to download image")
+        
+        # Convert to PDF
+        if not convert_image_to_pdf(image_path, pdf_path):
+            raise Exception(f"Failed to convert image to PDF")
+        
+        # Clean up transcription if needed (skipping for now)
+        if skip_cleanup:
+            cleaned_transcription = transcription
+        else:
+            # TODO: Add transcription cleanup using GPT-4o
+            cleaned_transcription = transcription
+        
+        # Create markdown file
+        create_markdown_file(cleaned_transcription, md_path)
+        
+        # Verify both files exist and are non-empty
+        if pdf_path.exists() and md_path.exists():
+            if pdf_path.stat().st_size > 0 and md_path.stat().st_size > 0:
+                with processed_lock:
+                    processed_assets.add(safe_filename)
+                
+                # Clean up temp image
+                image_path.unlink(missing_ok=True)
+                return (asset, True, None)
+            else:
+                raise Exception("Output files are empty")
+        else:
+            raise Exception("Output files were not created")
+            
+    except Exception as e:
+        # Clean up any partial files
+        pdf_path.unlink(missing_ok=True)
+        md_path.unlink(missing_ok=True)
+        if 'image_path' in locals() and image_path.exists():
+            image_path.unlink(missing_ok=True)
+        return (asset, False, str(e))
+
+
+def process_csv_file(
+    csv_path: Path, 
+    output_dir: Path, 
+    processed_assets: Set[str], 
+    skip_cleanup: bool = True,
+    max_workers: int = 1
+) -> None:
+    """Process a single CSV file containing LOC transcription data with parallel processing."""
     csv_name = csv_path.stem
     dataset_output_dir = output_dir / csv_name
     dataset_output_dir.mkdir(parents=True, exist_ok=True)
     
-    print(f"\nProcessing {csv_path.name}")
+    print(f"\nProcessing {csv_path.name} with {max_workers} workers")
     
     # Read CSV
     with open(csv_path, 'r', encoding='utf-8', errors='ignore') as f:
         reader = csv.DictReader(f)
         rows = list(reader)
     
-    # Count already processed items for this CSV
-    already_done = sum(1 for row in rows 
-                      if 'Asset' in row and get_safe_filename(row['Asset']) in processed_assets)
+    # Filter out already processed items upfront
+    rows_to_process = []
+    already_done = 0
+    
+    for row in rows:
+        if 'Asset' in row and row['Asset']:
+            safe_filename = get_safe_filename(row['Asset'])
+            if safe_filename not in processed_assets:
+                rows_to_process.append(row)
+            else:
+                already_done += 1
     
     if already_done > 0:
         print(f"  Skipping {already_done} already processed items")
     
-    # Process each row
-    processed = 0
-    skipped = 0
-    newly_processed = 0
+    if not rows_to_process:
+        print(f"  All items already processed for {csv_name}")
+        return
     
     # Create temp directory for downloads
     temp_dir = dataset_output_dir / 'temp'
     temp_dir.mkdir(exist_ok=True)
     
-    for row in tqdm(rows, desc=f"Processing {csv_name}"):
-        # Check required fields
-        if not all(key in row for key in ['Asset', 'DownloadUrl', 'Transcription']):
-            skipped += 1
-            continue
+    # Thread-safe counters and lock
+    processed_lock = threading.Lock()
+    processed = already_done
+    newly_processed = 0
+    skipped = 0
+    
+    # Process items in parallel
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        futures = {
+            executor.submit(
+                process_single_item,
+                row,
+                dataset_output_dir,
+                skip_cleanup,
+                processed_lock,
+                processed_assets
+            ): row for row in rows_to_process
+        }
         
-        asset = row['Asset']
-        download_url = row['DownloadUrl']
-        transcription = row['Transcription']
-        
-        if not asset or not download_url or not transcription:
-            skipped += 1
-            continue
-        
-        # Create safe filename using Asset column
-        safe_filename = get_safe_filename(asset)
-        
-        # Skip if already processed
-        if safe_filename in processed_assets:
-            processed += 1
-            continue
-        
-        # Define output paths
-        pdf_path = dataset_output_dir / f"{safe_filename}.pdf"
-        md_path = dataset_output_dir / f"{safe_filename}.md"
-        
-        # Double-check if files already exist on disk
-        if pdf_path.exists() and md_path.exists():
-            # Verify files are not empty
-            if pdf_path.stat().st_size > 0 and md_path.stat().st_size > 0:
-                processed += 1
-                processed_assets.add(safe_filename)
-                continue
-            else:
-                # Remove empty files to reprocess
-                pdf_path.unlink(missing_ok=True)
-                md_path.unlink(missing_ok=True)
-        
-        # Process the item
-        try:
-            # Download image
-            image_path = temp_dir / f"{safe_filename}.jpg"
-            
-            if not download_image(download_url, image_path):
-                raise Exception(f"Failed to download image")
-            
-            # Convert to PDF
-            if not convert_image_to_pdf(image_path, pdf_path):
-                raise Exception(f"Failed to convert image to PDF")
-            
-            # Clean up transcription if needed (skipping for now)
-            if skip_cleanup:
-                cleaned_transcription = transcription
-            else:
-                # TODO: Add transcription cleanup using GPT-4o
-                cleaned_transcription = transcription
-            
-            # Create markdown file
-            create_markdown_file(cleaned_transcription, md_path)
-            
-            # Verify both files exist and are non-empty
-            if pdf_path.exists() and md_path.exists():
-                if pdf_path.stat().st_size > 0 and md_path.stat().st_size > 0:
-                    processed += 1
-                    newly_processed += 1
-                    processed_assets.add(safe_filename)
-                    
-                    # Clean up temp image
-                    image_path.unlink(missing_ok=True)
-                else:
-                    raise Exception("Output files are empty")
-            else:
-                raise Exception("Output files were not created")
+        # Process results with progress bar
+        with tqdm(total=len(rows_to_process), desc=f"Processing {csv_name}") as pbar:
+            for future in as_completed(futures):
+                asset, success, error_msg = future.result()
                 
-        except Exception as e:
-            print(f"\nError processing {asset}: {e}")
-            skipped += 1
-            # Clean up any partial files
-            pdf_path.unlink(missing_ok=True)
-            md_path.unlink(missing_ok=True)
-            if 'image_path' in locals():
-                image_path.unlink(missing_ok=True)
+                if success:
+                    with processed_lock:
+                        processed += 1
+                        if error_msg is None:  # None means newly processed
+                            newly_processed += 1
+                else:
+                    with processed_lock:
+                        skipped += 1
+                    if error_msg and asset:
+                        tqdm.write(f"Error processing {asset}: {error_msg}")
+                
+                pbar.update(1)
     
     # Clean up temp directory
     if temp_dir.exists():
@@ -244,6 +306,8 @@ def main():
                         help='Skip transcription cleanup with GPT-4o (default: True)')
     parser.add_argument('--csv-pattern', type=str, default='*.csv',
                         help='Pattern to match CSV files (default: *.csv)')
+    parser.add_argument('--parallel', type=int, default=1,
+                        help='Number of parallel download/processing threads (default: 1)')
     
     args = parser.parse_args()
     
@@ -252,6 +316,10 @@ def main():
     
     if not input_dir.exists():
         print(f"Error: Input directory {input_dir} does not exist")
+        return
+    
+    if args.parallel < 1:
+        print(f"Error: --parallel must be at least 1")
         return
     
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -264,6 +332,7 @@ def main():
         return
     
     print(f"Found {len(csv_files)} CSV files to process")
+    print(f"Using {args.parallel} parallel workers")
     
     # Scan existing outputs to avoid reprocessing
     print("Scanning existing outputs...")
@@ -274,7 +343,7 @@ def main():
     
     # Process each CSV file
     for csv_file in csv_files:
-        process_csv_file(csv_file, output_dir, processed_assets, args.skip_cleanup)
+        process_csv_file(csv_file, output_dir, processed_assets, args.skip_cleanup, args.parallel)
     
     print(f"\nAll processing complete. Output saved to {output_dir}")
     print(f"Total items processed: {len(processed_assets)}")
