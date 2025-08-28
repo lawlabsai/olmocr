@@ -101,11 +101,11 @@ def scan_existing_outputs(output_dir: Path) -> Set[str]:
         # Only consider fully processed (both pdf and md exist)
         complete_files = pdf_files.intersection(md_files)
         
-        # Verify files are not empty
+        # Verify PDF files are not empty (md can be empty)
         for filename in complete_files:
             pdf_path = dataset_dir / f"{filename}.pdf"
             md_path = dataset_dir / f"{filename}.md"
-            if pdf_path.stat().st_size > 0 and md_path.stat().st_size > 0:
+            if pdf_path.stat().st_size > 0:  # Only PDF needs to be non-empty
                 processed_assets.add(filename)
     
     return processed_assets
@@ -123,6 +123,11 @@ def process_single_item(
     # Check required fields (Transcription can be empty)
     if not all(key in row for key in ['Asset', 'DownloadUrl']):
         return ('', False, 'Missing required fields')
+    
+    # Check AssetStatus is completed
+    asset_status = row.get('AssetStatus', '')
+    if asset_status != 'completed':
+        return (row.get('Asset', ''), False, f'AssetStatus is not completed: {asset_status}')
     
     asset = row['Asset']
     download_url = row['DownloadUrl']
@@ -145,13 +150,13 @@ def process_single_item(
     
     # Double-check if files already exist on disk
     if pdf_path.exists() and md_path.exists():
-        # Verify files are not empty
-        if pdf_path.stat().st_size > 0 and md_path.stat().st_size > 0:
+        # Verify PDF is not empty (md can be empty)
+        if pdf_path.stat().st_size > 0:
             with processed_lock:
                 processed_assets.add(safe_filename)
             return (asset, True, None)
         else:
-            # Remove empty files to reprocess
+            # Remove files to reprocess if PDF is empty
             pdf_path.unlink(missing_ok=True)
             md_path.unlink(missing_ok=True)
     
@@ -180,9 +185,9 @@ def process_single_item(
         # Create markdown file
         create_markdown_file(cleaned_transcription, md_path)
         
-        # Verify both files exist and are non-empty
+        # Verify both files exist (md can be empty, pdf should not be)
         if pdf_path.exists() and md_path.exists():
-            if pdf_path.stat().st_size > 0 and md_path.stat().st_size > 0:
+            if pdf_path.stat().st_size > 0:  # Only PDF needs to be non-empty
                 with processed_lock:
                     processed_assets.add(safe_filename)
                 
@@ -190,7 +195,7 @@ def process_single_item(
                 image_path.unlink(missing_ok=True)
                 return (asset, True, None)
             else:
-                raise Exception("Output files are empty")
+                raise Exception("PDF file is empty")
         else:
             raise Exception("Output files were not created")
             
