@@ -99,7 +99,7 @@ import threading
 from PIL import Image
 
 
-def download_image(url: str, output_path: Path, max_retries: int = 3) -> bool:
+def download_image(url: str, output_path: Path, max_retries: int = 5) -> bool:
     """Download image from URL with exponential backoff retry logic."""
     for attempt in range(max_retries):
         try:
@@ -171,29 +171,22 @@ def extract_transcriptions_with_target(record: Dict, object_id: str) -> Tuple[st
     """Extract transcriptions and target info for a specific object ID.
     Returns (transcription_text, target_dict)
     """
-    transcriptions = []
-    target_info = None
-    
     # Check if record_transcription exists
     if 'record_transcription' not in record:
-        return "", None
+        return None, None
     
     for trans in record.get('record_transcription', []):
         # Check if this transcription is for our object
         target = trans.get('target', {})
         if str(target.get('objectId')) == str(object_id):
-            # Store target info from first matching transcription
-            if target_info is None:
-                target_info = target
-            
             # Check contributionType is transcription
             if trans.get('contributionType') == 'transcription':
                 contribution = trans.get('contribution', '')
                 if contribution:
-                    transcriptions.append(contribution)
+                    return contribution, target
     
-    # Join all transcriptions with newlines
-    return '\n\n'.join(transcriptions), target_info
+    # If nothing was found, then we will be skipping this entry
+    return None, None
 
 
 def check_ai_generated_tags(record: Dict) -> bool:
@@ -276,17 +269,17 @@ def process_single_record(
         
         # Extract transcription and target info
         transcription, target_info = extract_transcriptions_with_target(record_data, object_id)
+
+        if transcription is None or target_info is None:
+            skipped += 1
+            continue
         
         # Build filename from target info
-        if target_info:
-            na_id = target_info.get('naId', '')
-            obj_id = target_info.get('objectId', object_id)
-            page_num = target_info.get('pageNum', 1)
-            filename = f"{na_id}-{obj_id}-page-{page_num}"
-        else:
-            # Fallback to object_id if no target info
-            filename = object_id
-        
+        na_id = target_info.get('naId', '')
+        obj_id = target_info.get('objectId', object_id)
+        page_num = target_info.get('pageNum', 1)
+        filename = f"{na_id}-{obj_id}-page-{page_num}"
+
         # Check if already processed
         with processed_lock:
             if filename in processed_items:
