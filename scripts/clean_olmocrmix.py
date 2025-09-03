@@ -9,7 +9,7 @@ import os
 import random
 import sys
 from pathlib import Path
-from typing import List, Tuple, Any, Dict
+from typing import List, Tuple, Any, Dict, Optional
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -25,6 +25,7 @@ class CleanedDocument(BaseModel):
     cleaned_text: str = Field(description="The cleaned and corrected version of the OCR transcription")
     confidence_score: float = Field(description="Confidence score from 0 to 1 indicating how confident the model is in the cleaning", ge=0.0, le=1.0)
     corrections_made: List[str] = Field(description="List of major corrections or improvements made to the text")
+    is_page_all_blank: bool = Field(description="Document consistents entire of blank page, or only headers/footers that would otherwise be removed")
 
 
 @dataclass
@@ -156,8 +157,10 @@ def clean_document_with_chatgpt(
                 "3. Remove any original transcriber's marks and notes, usually indicated by [ and ] symbols.\n"
                 "4. Fix word breaks and line breaks\n"
                 "5. Ensure mathematical formulas and special characters are correct\n"
-                "6. Maintain the semantic structure of the document\n"
-                "7. Remove any headers or footers that are not semantically relevant to the main document contents, ex page numbers\n"
+                "6. If there are any figures or charts, label them with the following markdown syntax ![Alt text describing the contents of the figure](page_startx_starty_width_height.png)\n"
+                "7. Maintain the semantic structure of the document\n"
+                "8. Remove any headers or footers that are not semantically relevant to the main document contents, ex page numbers, document classifications, etc.\n"
+                "9. If the page is blank, you are allowed to return 'null' for the text.\n"
                 "Return a cleaned version that accurately represents the original document."
             )
         }
@@ -236,7 +239,10 @@ def process_document(
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
         # Write cleaned text
-        output_path.write_text(cleaned_result.cleaned_text, encoding='utf-8')
+        if cleaned_result.is_page_all_blank:
+            output_path.write_text("", encoding='utf-8')
+        else:
+            output_path.write_text(cleaned_result.cleaned_text, encoding='utf-8')
         
         # Create soft link for the original MD file as .md.orig
         orig_md_link_path = output_path.with_suffix('.md.orig')

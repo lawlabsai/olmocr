@@ -275,9 +275,9 @@ set -e
 # Create output directory
 mkdir -p {local_output_dir if local_output_dir else "/tmp/checkpoints"}
 
-# Start VLLM server in background
+# Start VLLM server in background (output goes to console)
 echo 'Starting VLLM server on GPU {vllm_gpu} as background process...'
-CUDA_VISIBLE_DEVICES={vllm_gpu} nohup trl vllm-serve --model {vllm_model_arg} --port 8000 --gpu-memory-utilization 0.9 > /tmp/vllm_server.log 2>&1 &
+CUDA_VISIBLE_DEVICES={vllm_gpu} trl vllm-serve --model {vllm_model_arg} --port 8000 --gpu-memory-utilization 0.5 &
 VLLM_PID=$!
 echo "VLLM server started with PID: $VLLM_PID"
 
