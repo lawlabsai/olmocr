@@ -806,8 +806,14 @@ def main():
         "--vllm_mode",
         type=str,
         default="colocate",
-        choices=["colocate", "server"],
-        help="VLLM execution mode: colocate or server (default: colocate)"
+        choices=["colocate", "server", "none"],
+        help="VLLM execution mode: colocate, server, or none to disable vllm (default: colocate)"
+    )
+    parser.add_argument(
+        "--num_iterations",
+        type=int,
+        default=1,
+        help="Number of GRPO iterations (default: 1)"
     )
     
     args = parser.parse_args()
@@ -955,10 +961,11 @@ def main():
         beta=args.beta,
         importance_sampling_level=args.importance_sampling_level,
         reward_weights=reward_weights,
+        num_iterations=args.num_iterations,
 
         # Vllm setup to speed up generation
-        use_vllm=True,
-        vllm_mode=args.vllm_mode,
+        use_vllm=(args.vllm_mode != "none"),
+        vllm_mode=args.vllm_mode if args.vllm_mode != "none" else "colocate",
         vllm_gpu_memory_utilization=0.15,
         log_completions=True,
     )
