@@ -17,6 +17,7 @@ from rapidfuzz import distance
 import sys
 
 import torch
+import torch.distributed as dist
 import numpy as np
 import wandb
 from torch.utils.data import Dataset, DataLoader
@@ -43,6 +44,27 @@ logging.basicConfig(
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
+
+
+def get_rank():
+    """Get the rank of the current process in distributed training."""
+    # Check environment variables for rank information
+    rank = 0
+    
+    # Try different environment variables that might contain rank
+    if "LOCAL_RANK" in os.environ:
+        rank = int(os.environ["LOCAL_RANK"])
+    elif "RANK" in os.environ:
+        rank = int(os.environ["RANK"])
+    elif dist.is_available() and dist.is_initialized():
+        rank = dist.get_rank()
+    
+    return rank
+
+
+def is_main_process():
+    """Check if this is the main process (rank 0)."""
+    return get_rank() == 0
 
 
 class OlmOCRBenchDataset(Dataset):
@@ -622,6 +644,14 @@ def olmocr_bench_reward(prompts, completions: list[str] | list[list[dict]], comp
 
 
 def main():
+    # Log rank information early
+    rank = get_rank()
+    if "LOCAL_RANK" in os.environ:
+        logger.info(f"LOCAL_RANK environment variable: {os.environ['LOCAL_RANK']}")
+    if "RANK" in os.environ:
+        logger.info(f"RANK environment variable: {os.environ['RANK']}")
+    logger.info(f"Current process rank: {rank}, is_main_process: {is_main_process()}")
+    
     parser = argparse.ArgumentParser(description="GRPO training for OlmOCR")
     parser.add_argument(
         "--train_bench_data_folder", 
@@ -779,14 +809,18 @@ def main():
     # Set up output directory
     os.makedirs(args.output_dir, exist_ok=True)
     
-    # Initialize wandb if enabled
-    wandb.init(
-        project=args.wandb_project,
-        name=args.wandb_run_name,
-        config=vars(args)
-    )
-    logger.info(f"Initialized wandb project: {args.wandb_project}")
-    report_to = ["wandb"]
+    # Initialize wandb only on the main process (rank 0)
+    if is_main_process():
+        wandb.init(
+            project=args.wandb_project,
+            name=args.wandb_run_name,
+            config=vars(args)
+        )
+        logger.info(f"Initialized wandb project: {args.wandb_project} (rank {get_rank()})")
+        report_to = ["wandb"]
+    else:
+        logger.info(f"Skipping wandb initialization on rank {get_rank()}")
+        report_to = []  # No reporting for non-main processes
 
     
     # Verify train bench_data_folder exists
@@ -946,8 +980,9 @@ def main():
         
         logger.info("Training completed successfully!")
         
-        # Close wandb
-        wandb.finish()
+        # Close wandb only on main process
+        if is_main_process():
+            wandb.finish()
         
     except Exception as e:
         logger.error(f"Training failed: {e}")

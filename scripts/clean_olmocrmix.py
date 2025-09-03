@@ -25,7 +25,12 @@ class CleanedDocument(BaseModel):
     cleaned_text: str = Field(description="The cleaned and corrected version of the OCR transcription")
     confidence_score: float = Field(description="Confidence score from 0 to 1 indicating how confident the model is in the cleaning", ge=0.0, le=1.0)
     corrections_made: List[str] = Field(description="List of major corrections or improvements made to the text")
-    is_page_all_blank: bool = Field(description="Document consistents entire of blank page, or only headers/footers that would otherwise be removed")
+    is_page_all_blank: bool = Field(description="Document consists entirely of blank page, or only headers/footers that would otherwise be removed")
+    primary_language: str = Field(default="en", description="Primary language of the document (ISO 639-1 code, e.g. 'en' for English, 'es' for Spanish)")
+    is_rotation_valid: bool = Field(default=True, description="Whether the page orientation/rotation appears correct")
+    rotation_correction: int = Field(default=0, description="Degrees of rotation needed to correct orientation (0, 90, 180, or 270)")
+    is_table: bool = Field(default=False, description="Whether the page primarily contains a table")
+    is_diagram: bool = Field(default=False, description="Whether the page primarily contains a diagram or figure")
 
 
 @dataclass
@@ -238,11 +243,23 @@ def process_document(
         # Create output directory if needed
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Write cleaned text
+        # Prepare front matter
+        front_matter = f"""---
+primary_language: {cleaned_result.primary_language}
+is_rotation_valid: {str(cleaned_result.is_rotation_valid)}
+rotation_correction: {cleaned_result.rotation_correction}
+is_table: {str(cleaned_result.is_table)}
+is_diagram: {str(cleaned_result.is_diagram)}
+---"""
+        
+        # Write cleaned text with front matter
         if cleaned_result.is_page_all_blank:
-            output_path.write_text("", encoding='utf-8')
+            # For blank pages, write only the front matter, ending exactly after ---
+            output_path.write_text(front_matter, encoding='utf-8')
         else:
-            output_path.write_text(cleaned_result.cleaned_text, encoding='utf-8')
+            # Add front matter and cleaned text with a newline separator
+            full_content = front_matter + "\n" + cleaned_result.cleaned_text
+            output_path.write_text(full_content, encoding='utf-8')
         
         # Create soft link for the original MD file as .md.orig
         orig_md_link_path = output_path.with_suffix('.md.orig')
@@ -263,6 +280,12 @@ def process_document(
             'original_pdf': str(doc_pair.pdf_path),
             'confidence_score': cleaned_result.confidence_score,
             'corrections_made': cleaned_result.corrections_made,
+            'is_page_all_blank': cleaned_result.is_page_all_blank,
+            'primary_language': cleaned_result.primary_language,
+            'is_rotation_valid': cleaned_result.is_rotation_valid,
+            'rotation_correction': cleaned_result.rotation_correction,
+            'is_table': cleaned_result.is_table,
+            'is_diagram': cleaned_result.is_diagram,
             'model': model,
             'pages_rendered': 1
         }
