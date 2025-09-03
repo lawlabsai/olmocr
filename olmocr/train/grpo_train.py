@@ -766,6 +766,13 @@ def main():
         default=None,
         help="Use front matter validation and field matching reward with optional weight (default: 1.0)"
     )
+    parser.add_argument(
+        "--vllm_mode",
+        type=str,
+        default="colocate",
+        choices=["colocate", "server"],
+        help="VLLM execution mode: colocate or server (default: colocate)"
+    )
     
     args = parser.parse_args()
     
@@ -912,7 +919,7 @@ def main():
 
         # Vllm setup to speed up generation
         use_vllm=True,
-        vllm_mode="colocate",
+        vllm_mode=args.vllm_mode,
         vllm_gpu_memory_utilization=0.15,
         log_completions=True,
     )
