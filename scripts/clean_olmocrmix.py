@@ -53,7 +53,7 @@ def parse_args():
     )
     parser.add_argument(
         "--model",
-        default="gpt-4o-mini",
+        default="gpt-4o-2024-08-06",
         help="OpenAI model to use (default: gpt-4o-mini)"
     )
     parser.add_argument(
@@ -189,7 +189,7 @@ def clean_document_with_chatgpt(
             messages=messages,  # type: ignore
             response_format=CleanedDocument,
             temperature=0.2,  # Lower temperature for more consistent cleaning
-            max_tokens=32000,
+            max_tokens=16384
         )
         
         parsed_result = response.choices[0].message.parsed
