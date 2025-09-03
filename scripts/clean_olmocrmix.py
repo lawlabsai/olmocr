@@ -165,7 +165,8 @@ def clean_document_with_chatgpt(
                 "6. If there are any figures or charts, label them with the following markdown syntax ![Alt text describing the contents of the figure](page_startx_starty_width_height.png)\n"
                 "7. Maintain the semantic structure of the document\n"
                 "8. Remove any headers or footers that are not semantically relevant to the main document contents, ex page numbers, document classifications, etc.\n"
-                "9. If the page is blank, you are allowed to return 'null' for the text.\n"
+                "9. Convert tables into HTML format. Keep the syntax simple, but use <th> for header rows, and use rowspan and colspans appropriately. Don't use <br> inside of table cells, just split that into new rows as needed. Do NOT use LaTeX or Markdown table syntax.\n"
+                "10. If the page is blank, you are allowed to return 'null' for the text.\n"
                 "Return a cleaned version that accurately represents the original document."
             )
         }
