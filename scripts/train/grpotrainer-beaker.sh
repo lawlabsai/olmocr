@@ -115,7 +115,7 @@ b = Beaker.from_env(default_workspace="ai2/olmocr")
 commands = [
     # Install dependencies
     "pip install .[train]",
-    "pip install trl wandb",
+    "pip install trl==0.22.2 wandb",
     "pip install transformers==4.55.2",  # Updated for GRPO compatibility
     "pip install flash-attn==2.8.0.post2 --no-build-isolation",
     "pip install vllm==v0.10.1.1",

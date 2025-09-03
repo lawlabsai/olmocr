@@ -747,15 +747,10 @@ def main():
     )
     parser.add_argument(
         "--scale_rewards",
-        action="store_true",
-        default=True,
-        help="Whether to scale rewards by their standard deviation (default: True)"
-    )
-    parser.add_argument(
-        "--no_scale_rewards",
-        action="store_false",
-        dest="scale_rewards",
-        help="Disable reward scaling"
+        type=str,
+        default="group",
+        choices=["group", "batch", "none"],
+        help="Scaling strategy for rewards: 'group' (scale by std within each group), 'batch' (scale by std across batch), or 'none' (no scaling). Default: 'group'"
     )
     parser.add_argument(
         "--beta",
