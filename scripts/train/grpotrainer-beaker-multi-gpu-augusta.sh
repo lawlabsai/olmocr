@@ -251,23 +251,49 @@ for i, arg in enumerate(modified_args):
 grpo_cmd += " " + " ".join(filtered_args)
 
 # Create a bash script as a single command string with S3 sync
-s3_sync_commands = ""
+# Prepare S3 sync command for embedding in cleanup function
 if local_output_dir and s3_output_path:
-    s3_sync_commands = f"""
-
-# Sync checkpoints to S3
-echo 'Syncing checkpoints to S3...'
-if [ -d "{local_output_dir}" ]; then
-    echo "Syncing from {local_output_dir} to {s3_output_path}"
-    s5cmd sync '{local_output_dir}/*' '{s3_output_path}/'
-    echo 'S3 sync completed successfully'
-else
-    echo 'Warning: Output directory {local_output_dir} not found, skipping S3 sync'
-fi
-"""
+    s3_sync_cmd = f"s5cmd sync '{local_output_dir}/*' '{s3_output_path}/'"
+else:
+    s3_sync_cmd = None
 
 bash_script = f"""
 set -e
+
+# Define cleanup function that will always run
+cleanup() {{
+    EXIT_CODE=$?
+    echo "Running cleanup (exit code: $EXIT_CODE)..."
+    
+    # Kill VLLM server if it's still running
+    if [ ! -z "$VLLM_PID" ]; then
+        echo "Killing VLLM server (PID: $VLLM_PID)..."
+        kill $VLLM_PID || true
+        echo "VLLM server stopped."
+    fi
+    
+    # Always sync to S3 if output directory exists
+    echo "Checking for outputs to sync to S3..."
+    if [ -d "{local_output_dir if local_output_dir else '/tmp/checkpoints'}" ]; then
+        echo "Output directory exists, syncing to S3..."
+        {f'echo "Syncing from {local_output_dir} to {s3_output_path}"' if s3_sync_cmd else ''}
+        {s3_sync_cmd if s3_sync_cmd else 'echo "No S3 sync configured"'}
+        {f'echo "S3 sync completed"' if s3_sync_cmd else ''}
+    else
+        echo "No output directory found, skipping S3 sync"
+    fi
+    
+    if [ $EXIT_CODE -eq 0 ]; then
+        echo "Script completed successfully"
+    else
+        echo "Script failed with exit code: $EXIT_CODE"
+    fi
+    
+    exit $EXIT_CODE
+}}
+
+# Set trap to run cleanup on EXIT (covers both success and failure)
+trap cleanup EXIT
 
 # Setup commands
 {" && ".join(setup_commands)}
@@ -298,11 +324,7 @@ done
 echo 'Starting GRPO training on GPUs {training_gpu_str}...'
 {grpo_cmd}
 
-# Cleanup
-echo 'Training completed. Killing VLLM server...'
-kill $VLLM_PID || true
-echo 'VLLM server stopped.'
-{s3_sync_commands}
+echo 'Training completed successfully!'
 """
 
 # Create single task spec
