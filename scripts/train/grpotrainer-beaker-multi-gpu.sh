@@ -141,8 +141,8 @@ for i in range(len(modified_args)):
             model_path_local = model_path
         break
 
-# Build base setup commands (shared between both tasks)
-base_setup_commands = [
+# Build setup commands
+setup_commands = [
     # Install dependencies
     "pip install .[train]",
     "pip install trl wandb",
@@ -160,10 +160,8 @@ base_setup_commands = [
 ]
 
 # Add model sync commands if needed
-base_setup_commands.extend(model_sync_commands)
-
-# Task 1: VLLM Server (runs on GPU 3)
-vllm_commands = base_setup_commands.copy()
+if model_sync_commands:
+    setup_commands.extend(model_sync_commands)
 
 # Determine model path for VLLM server
 if model_path_local:
@@ -176,67 +174,30 @@ else:
             vllm_model_arg = modified_args[i + 1]
             break
 
-vllm_commands.extend([
-    "echo 'Starting VLLM server on GPU 3...'",
-    f"CUDA_VISIBLE_DEVICES=3 trl vllm-serve --model {vllm_model_arg} --port 8000 --gpu-memory-utilization 0.9"
-])
-
-vllm_task = TaskSpec(
-    name="vllm-server",
-    image=ImageSource(beaker=f"{beaker_user}/{image_tag}"),
-    command=[
-        "bash", "-c",
-        " && ".join(vllm_commands)
-    ],
-    context=TaskContext(
-        priority=Priority.normal,
-        preemptible=preemptible,
-    ),
-    resources=TaskResources(
-        gpu_count=4,  # Request 4 GPUs but only use GPU 3
-        shared_memory="10GiB"
-    ),
-    constraints=Constraints(cluster=["ai2/jupiter", "ai2/augusta"]),
-    result=ResultSpec(path="/noop-results"),
-    env_vars=[
-        EnvVar(name="LOG_FILTER_TYPE", value="local_rank0_only"),
-        EnvVar(name="OMP_NUM_THREADS", value="8"),
-        EnvVar(name="BEAKER_USER_ID", value=beaker_user),
-        EnvVar(name="AWS_ACCESS_KEY_ID", secret="ALLENNLP_AWS_ACCESS_KEY_ID"),
-        EnvVar(name="AWS_SECRET_ACCESS_KEY", secret="ALLENNLP_AWS_SECRET_ACCESS_KEY"),
-    ],
-    datasets=[
-        DataMount.new(mount_path="/weka/oe-data-default", weka="oe-data-default"),
-        DataMount.new(mount_path="/weka/oe-training-default", weka="oe-training-default"),
-    ]
-)
-
-# Task 2: Training (runs on GPUs 0,1,2)
-training_commands = base_setup_commands.copy()
-
 # Build the GRPO training command with forwarded arguments
 # Force --vllm_mode server
-grpo_cmd = ["CUDA_VISIBLE_DEVICES=0,1,2 accelerate launch --multi_gpu --use_deepspeed --zero_stage 2 --num_processes 3 --gradient_accumulation_steps 8 -m olmocr.train.grpo_train"]
+grpo_cmd = "CUDA_VISIBLE_DEVICES=0,1,2 accelerate launch --use_deepspeed --zero_stage 2 --num_processes 3 --gradient_accumulation_steps 8 -m olmocr.train.grpo_train"
 
 # Add --vllm_mode server if not already in arguments
 arg_str = " ".join(modified_args)
 if "--vllm_mode" not in arg_str:
-    grpo_cmd.append("--vllm_mode server")
+    grpo_cmd += " --vllm_mode server"
 
 # Check if certain required arguments are in the provided args, add defaults if not
 if "--train_bench_data_folder" not in arg_str:
-    grpo_cmd.append("--train_bench_data_folder /data/olmOCR-bench/bench_data")
+    grpo_cmd += " --train_bench_data_folder /data/olmOCR-bench/bench_data"
 if "--eval_bench_data_folder" not in arg_str:
-    grpo_cmd.append("--eval_bench_data_folder /data/olmOCR-bench/bench_data")
+    grpo_cmd += " --eval_bench_data_folder /data/olmOCR-bench/bench_data"
 if "--output_dir" not in arg_str:
     output_dir = "/weka/oe-training-default/jakep/olmocr-grpo-checkpoints"
     # Build subdirectory based on exp_name and BEAKER_WORKLOAD_ID
+    beaker_workload_id = "${BEAKER_WORKLOAD_ID}"
     if exp_name:
         # For multi-GPU runs, add suffix to distinguish
-        output_dir = f"{output_dir}/{exp_name}-multigpu-${{BEAKER_WORKLOAD_ID}}"
+        output_dir = f"{output_dir}/{exp_name}-multigpu-{beaker_workload_id}"
     else:
-        output_dir = f"{output_dir}/multigpu-${{BEAKER_WORKLOAD_ID}}"
-    grpo_cmd.append(f"--output_dir {output_dir}")
+        output_dir = f"{output_dir}/multigpu-{beaker_workload_id}"
+    grpo_cmd += f" --output_dir {output_dir}"
 
 # Add all the (possibly modified) arguments, filtering out --vllm_mode if it exists to avoid duplicates
 filtered_args = []
@@ -250,34 +211,61 @@ for i, arg in enumerate(modified_args):
         continue
     filtered_args.append(arg)
 
-grpo_cmd.extend(filtered_args)
+grpo_cmd += " " + " ".join(filtered_args)
 
-# Wait for VLLM server to be ready, then start training
-training_commands.extend([
-    "echo 'Waiting for VLLM server to be ready...'",
-    "sleep 30",  # Give VLLM server time to start
-    # Check if VLLM server is responding
-    "for i in {1..60}; do curl -s http://localhost:8000/health && break || echo 'Waiting for VLLM server...' && sleep 5; done",
-    "echo 'Starting GRPO training on GPUs 0,1,2...'",
-    " ".join(grpo_cmd)
-])
+# Create a bash script as a single command string
+bash_script = """
+set -e
 
-training_task = TaskSpec(
-    name="olmocr-grpo-training-multi-gpu",
+# Setup commands
+""" + " && ".join(setup_commands) + """
+
+# Start VLLM server in background
+echo 'Starting VLLM server on GPU 3 as background process...'
+CUDA_VISIBLE_DEVICES=3 nohup trl vllm-serve --model """ + vllm_model_arg + """ --port 8000 --gpu-memory-utilization 0.9 > /tmp/vllm_server.log 2>&1 &
+VLLM_PID=$!
+echo "VLLM server started with PID: $VLLM_PID"
+
+# Wait for VLLM server to be ready
+echo 'Waiting for VLLM server to be ready...'
+sleep 30
+for i in {1..60}; do 
+    if curl -s http://localhost:8000/health; then
+        echo ' - VLLM server is ready!'
+        break
+    else
+        echo 'Still waiting for VLLM server...'
+        sleep 5
+    fi
+done
+
+# Run training
+echo 'Starting GRPO training on GPUs 0,1,2...'
+""" + grpo_cmd + """
+
+# Cleanup
+echo 'Training completed. Killing VLLM server...'
+kill $VLLM_PID || true
+echo 'VLLM server stopped.'
+"""
+
+# Create single task spec
+task_spec = TaskSpec(
+    name="olmocr-grpo-multi-gpu",
     image=ImageSource(beaker=f"{beaker_user}/{image_tag}"),
     command=[
         "bash", "-c",
-        " && ".join(training_commands)
+        bash_script
     ],
     context=TaskContext(
         priority=Priority.normal,
         preemptible=preemptible,
     ),
     resources=TaskResources(
-        gpu_count=4,  # Request 4 GPUs, use 3 for training
+        gpu_count=4,  # Request 4 GPUs total
         shared_memory="10GiB"
     ),
-    constraints=Constraints(cluster=["ai2/jupiter", "ai2/augusta"]),
+    constraints=Constraints(cluster=["ai2/jupiter", "ai2/saturn"]),
     result=ResultSpec(path="/noop-results"),
     env_vars=[
         EnvVar(name="LOG_FILTER_TYPE", value="local_rank0_only"),
@@ -301,11 +289,11 @@ for i, arg in enumerate(modified_args):
             model_name = modified_args[i + 1]
             break
 
-# Create experiment spec with both tasks
+# Create experiment spec with single task
 experiment_spec = ExperimentSpec(
     description=f"OlmOCR GRPO Multi-GPU Training (3 GPUs + VLLM Server) - Model: {model_name}, Branch: {git_branch}, Commit: {git_hash}",
     budget="ai2/oe-base",
-    tasks=[vllm_task, training_task],  # Both tasks run in parallel
+    tasks=[task_spec],  # Single task that manages both VLLM and training
 )
 
 # Create the experiment
