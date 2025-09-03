@@ -709,6 +709,12 @@ def main():
         help="Gradient accumulation steps"
     )
     parser.add_argument(
+        "--warmup_steps",
+        type=int,
+        default=10,
+        help="Number of warmup steps for learning rate scheduler"
+    )
+    parser.add_argument(
         "--max_train_samples",
         type=int,
         default=None,
@@ -934,7 +940,7 @@ def main():
         logging_steps=10,
         save_steps=100,
         eval_steps=50,
-        warmup_steps=10,
+        warmup_steps=args.warmup_steps,
         max_prompt_length=3000,
         max_completion_length=3000,
         temperature=0.7,
