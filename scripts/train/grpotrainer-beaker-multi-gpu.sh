@@ -192,9 +192,19 @@ else:
             vllm_model_arg = modified_args[i + 1]
             break
 
+# Extract gradient_accumulation_steps from arguments if provided, otherwise use default
+grad_acc_steps = 8  # Default value
+for i, arg in enumerate(modified_args):
+    if arg == "--gradient_accumulation_steps" and i + 1 < len(modified_args):
+        try:
+            grad_acc_steps = int(modified_args[i + 1])
+        except (ValueError, IndexError):
+            pass  # Keep default if parsing fails
+        break
+
 # Build the GRPO training command with forwarded arguments
 # Force --vllm_mode server
-grpo_cmd = f"CUDA_VISIBLE_DEVICES={training_gpu_str} accelerate launch --use_deepspeed --zero_stage 2 --num_processes {num_training_processes} --gradient_accumulation_steps 8 -m olmocr.train.grpo_train"
+grpo_cmd = f"CUDA_VISIBLE_DEVICES={training_gpu_str} accelerate launch --use_deepspeed --zero_stage 2 --num_processes {num_training_processes} --gradient_accumulation_steps {grad_acc_steps} -m olmocr.train.grpo_train"
 
 # Add --vllm_mode server if not already in arguments
 arg_str = " ".join(modified_args)
@@ -218,6 +228,8 @@ if "--output_dir" not in arg_str:
     grpo_cmd += f" --output_dir {output_dir}"
 
 # Add all the (possibly modified) arguments, filtering out --vllm_mode if it exists to avoid duplicates
+# Note: We keep --gradient_accumulation_steps in the args even though we use it for accelerate,
+# because the training script also needs it for its configuration
 filtered_args = []
 skip_next = False
 for i, arg in enumerate(modified_args):
