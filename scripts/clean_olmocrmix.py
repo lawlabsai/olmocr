@@ -98,10 +98,9 @@ def check_single_page_pdf(pdf_path: Path) -> bool:
 
 
 def find_document_pairs(input_dir: Path, verbose: bool = False) -> List[DocumentPair]:
-    """Find all MD files with corresponding single-page PDF files."""
+    """Find all MD files with corresponding PDF files."""
     pairs = []
     skipped_no_pdf = 0
-    skipped_multi_page = 0
     
     for md_path in input_dir.rglob("*.md"):
         # Check for corresponding PDF
@@ -112,18 +111,11 @@ def find_document_pairs(input_dir: Path, verbose: bool = False) -> List[Document
             skipped_no_pdf += 1
             continue
             
-        # Check if PDF has exactly one page
-        if not check_single_page_pdf(pdf_path):
-            if verbose:
-                print(f"Warning: Skipping multi-page PDF {pdf_path}")
-            skipped_multi_page += 1
-            continue
-            
         relative_path = md_path.relative_to(input_dir)
         pairs.append(DocumentPair(md_path, pdf_path, relative_path))
     
-    if skipped_no_pdf > 0 or skipped_multi_page > 0:
-        print(f"Skipped {skipped_no_pdf} files without PDFs and {skipped_multi_page} multi-page PDFs")
+    if skipped_no_pdf > 0:
+        print(f"Skipped {skipped_no_pdf} files without PDFs")
     
     return pairs
 
@@ -159,12 +151,13 @@ def clean_document_with_chatgpt(
                 "You are an expert at cleaning and correcting OCR transcriptions. "
                 "You will be given an OCR transcription and an image of the original PDF page. "
                 "Your task is to:\n"
-                "1. Fix OCR errors and typos\n"
-                "2. Correct formatting issues\n"
-                "3. Restore proper punctuation and capitalization\n"
+                "1. Correct formatting issues.\n"
+                "2. Preserve the exact spelling of words from the original document.\n"
+                "3. Remove any original transcriber's marks and notes, usually indicated by [ and ] symbols.\n"
                 "4. Fix word breaks and line breaks\n"
                 "5. Ensure mathematical formulas and special characters are correct\n"
                 "6. Maintain the semantic structure of the document\n"
+                "7. Remove any headers or footers that are not semantically relevant to the main document contents, ex page numbers\n"
                 "Return a cleaned version that accurately represents the original document."
             )
         }
@@ -196,7 +189,7 @@ def clean_document_with_chatgpt(
             messages=messages,  # type: ignore
             response_format=CleanedDocument,
             temperature=0.2,  # Lower temperature for more consistent cleaning
-            max_tokens=16384
+            max_tokens=32000,
         )
         
         parsed_result = response.choices[0].message.parsed
@@ -224,6 +217,10 @@ def process_document(
         return True, f"Skipped (already exists): {doc_pair.relative_path}"
     
     try:
+        # Check if PDF has exactly one page
+        if not check_single_page_pdf(doc_pair.pdf_path):
+            return False, f"Skipped multi-page PDF: {doc_pair.pdf_path}"
+        
         # Read the markdown content
         md_content = doc_pair.md_path.read_text(encoding='utf-8')
         
@@ -240,6 +237,18 @@ def process_document(
         
         # Write cleaned text
         output_path.write_text(cleaned_result.cleaned_text, encoding='utf-8')
+        
+        # Create soft link for the original MD file as .md.orig
+        orig_md_link_path = output_path.with_suffix('.md.orig')
+        if orig_md_link_path.exists() or orig_md_link_path.is_symlink():
+            orig_md_link_path.unlink()
+        orig_md_link_path.symlink_to(doc_pair.md_path.absolute())
+        
+        # Create soft link for the PDF file
+        pdf_link_path = output_dir / doc_pair.relative_path.with_suffix('.pdf')
+        if pdf_link_path.exists() or pdf_link_path.is_symlink():
+            pdf_link_path.unlink()
+        pdf_link_path.symlink_to(doc_pair.pdf_path.absolute())
         
         # Also write metadata
         metadata_path = output_path.with_suffix('.json')
@@ -280,10 +289,10 @@ def main():
     
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # Find all document pairs (single-page PDFs only)
-    print(f"Scanning {input_dir} for single-page document pairs...")
+    # Find all document pairs
+    print(f"Scanning {input_dir} for document pairs...")
     doc_pairs = find_document_pairs(input_dir, args.verbose)
-    print(f"Found {len(doc_pairs)} valid single-page document pairs.")
+    print(f"Found {len(doc_pairs)} document pairs (will check page count during processing).")
     
     if not doc_pairs:
         print("No document pairs found.")
@@ -301,6 +310,7 @@ def main():
     # Process documents in batches
     successful = 0
     failed = 0
+    skipped_multi_page = 0
     
     with ThreadPoolExecutor(max_workers=args.batch_size) as executor:
         futures = []
@@ -324,7 +334,10 @@ def main():
                 if success:
                     successful += 1
                 else:
-                    failed += 1
+                    if "multi-page" in message.lower():
+                        skipped_multi_page += 1
+                    else:
+                        failed += 1
                 
                 if args.verbose:
                     tqdm.write(message)
@@ -332,13 +345,15 @@ def main():
                 pbar.update(1)
                 pbar.set_postfix({
                     'successful': successful,
+                    'skipped': skipped_multi_page,
                     'failed': failed
                 })
     
     # Print summary
     print(f"\nProcessing complete:")
     print(f"  Successful: {successful}")
-    print(f"  Failed: {failed}")
+    print(f"  Skipped (multi-page): {skipped_multi_page}")
+    print(f"  Failed (other errors): {failed}")
     print(f"  Output directory: {output_dir}")
 
 
