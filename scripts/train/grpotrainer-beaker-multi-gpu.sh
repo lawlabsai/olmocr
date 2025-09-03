@@ -6,6 +6,7 @@ set -e
 SKIP_DOCKER_BUILD=false
 PREEMPTIBLE=false
 EXP_NAME=""
+NUM_GPUS=4
 
 # Store all arguments to pass to python command
 PYTHON_ARGS=()
@@ -24,6 +25,14 @@ while [[ $# -gt 0 ]]; do
             EXP_NAME="$2"
             shift 2
             ;;
+        --num-gpus)
+            NUM_GPUS="$2"
+            if [ "$NUM_GPUS" -lt 2 ] || [ "$NUM_GPUS" -gt 8 ]; then
+                echo "Error: --num-gpus must be between 2 and 8 (got: $NUM_GPUS)"
+                exit 1
+            fi
+            shift 2
+            ;;
         --help|-h)
             echo "Usage: $0 [beaker-options] [grpo-training-options]"
             echo ""
@@ -31,13 +40,14 @@ while [[ $# -gt 0 ]]; do
             echo "  --skip-docker-build            Skip Docker build"
             echo "  --preemptible                  Use preemptible instances"
             echo "  --name NAME                    Experiment name (used in output directory)"
+            echo "  --num-gpus N                   Number of GPUs to use (2-8, default: 4)"
             echo ""
             echo "All other arguments are forwarded to python -m olmocr.train.grpo_train"
             echo "Run 'python -m olmocr.train.grpo_train --help' to see available training options"
             echo ""
             echo "This multi-GPU version runs:"
-            echo "  - VLLM server on GPU 3"
-            echo "  - Training on GPUs 0,1,2 with DeepSpeed"
+            echo "  - VLLM server on the last GPU"
+            echo "  - Training on all other GPUs with DeepSpeed"
             exit 0
             ;;
         *)
@@ -50,6 +60,7 @@ done
 
 echo "Preemptible: $PREEMPTIBLE"
 echo "Skip Docker Build: $SKIP_DOCKER_BUILD"
+echo "Number of GPUs: $NUM_GPUS"
 echo "Arguments to forward: ${PYTHON_ARGS[@]}"
 
 # Use conda environment Python if available, otherwise use system Python
@@ -109,8 +120,15 @@ git_branch = sys.argv[3]
 git_hash = sys.argv[4]
 preemptible = sys.argv[5] == "true"
 exp_name = sys.argv[6]  # Empty string if not provided
+num_gpus = int(sys.argv[7])
 # All remaining arguments are the python command arguments
-python_args = sys.argv[7:]
+python_args = sys.argv[8:]
+
+# Calculate GPU assignments
+vllm_gpu = num_gpus - 1  # Last GPU for VLLM
+training_gpus = list(range(num_gpus - 1))  # All other GPUs for training
+training_gpu_str = ",".join(str(g) for g in training_gpus)
+num_training_processes = len(training_gpus)
 
 # Initialize Beaker client
 b = Beaker.from_env(default_workspace="ai2/olmocr")
@@ -176,7 +194,7 @@ else:
 
 # Build the GRPO training command with forwarded arguments
 # Force --vllm_mode server
-grpo_cmd = "CUDA_VISIBLE_DEVICES=0,1,2 accelerate launch --use_deepspeed --zero_stage 2 --num_processes 3 --gradient_accumulation_steps 8 -m olmocr.train.grpo_train"
+grpo_cmd = f"CUDA_VISIBLE_DEVICES={training_gpu_str} accelerate launch --use_deepspeed --zero_stage 2 --num_processes {num_training_processes} --gradient_accumulation_steps 8 -m olmocr.train.grpo_train"
 
 # Add --vllm_mode server if not already in arguments
 arg_str = " ".join(modified_args)
@@ -214,22 +232,22 @@ for i, arg in enumerate(modified_args):
 grpo_cmd += " " + " ".join(filtered_args)
 
 # Create a bash script as a single command string
-bash_script = """
+bash_script = f"""
 set -e
 
 # Setup commands
-""" + " && ".join(setup_commands) + """
+{" && ".join(setup_commands)}
 
 # Start VLLM server in background
-echo 'Starting VLLM server on GPU 3 as background process...'
-CUDA_VISIBLE_DEVICES=3 nohup trl vllm-serve --model """ + vllm_model_arg + """ --port 8000 --gpu-memory-utilization 0.9 > /tmp/vllm_server.log 2>&1 &
+echo 'Starting VLLM server on GPU {vllm_gpu} as background process...'
+CUDA_VISIBLE_DEVICES={vllm_gpu} nohup trl vllm-serve --model {vllm_model_arg} --port 8000 --gpu-memory-utilization 0.9 > /tmp/vllm_server.log 2>&1 &
 VLLM_PID=$!
 echo "VLLM server started with PID: $VLLM_PID"
 
 # Wait for VLLM server to be ready
 echo 'Waiting for VLLM server to be ready...'
 sleep 30
-for i in {1..60}; do 
+for i in {{1..60}}; do 
     if curl -s http://localhost:8000/health; then
         echo ' - VLLM server is ready!'
         break
@@ -240,8 +258,8 @@ for i in {1..60}; do
 done
 
 # Run training
-echo 'Starting GRPO training on GPUs 0,1,2...'
-""" + grpo_cmd + """
+echo 'Starting GRPO training on GPUs {training_gpu_str}...'
+{grpo_cmd}
 
 # Cleanup
 echo 'Training completed. Killing VLLM server...'
@@ -262,7 +280,7 @@ task_spec = TaskSpec(
         preemptible=preemptible,
     ),
     resources=TaskResources(
-        gpu_count=4,  # Request 4 GPUs total
+        gpu_count=num_gpus,  # Request the specified number of GPUs
         shared_memory="10GiB"
     ),
     constraints=Constraints(cluster=["ai2/jupiter", "ai2/saturn"]),
@@ -291,7 +309,7 @@ for i, arg in enumerate(modified_args):
 
 # Create experiment spec with single task
 experiment_spec = ExperimentSpec(
-    description=f"OlmOCR GRPO Multi-GPU Training (3 GPUs + VLLM Server) - Model: {model_name}, Branch: {git_branch}, Commit: {git_hash}",
+    description=f"OlmOCR GRPO Multi-GPU Training ({num_training_processes} GPUs + VLLM Server) - Model: {model_name}, Branch: {git_branch}, Commit: {git_hash}",
     budget="ai2/oe-base",
     tasks=[task_spec],  # Single task that manages both VLLM and training
 )
@@ -311,6 +329,7 @@ $PYTHON /tmp/run_grpo_experiment_multi_gpu.py \
     "$GIT_HASH" \
     "$PREEMPTIBLE" \
     "$EXP_NAME" \
+    "$NUM_GPUS" \
     "${PYTHON_ARGS[@]}"
 
 # Clean up temporary file
