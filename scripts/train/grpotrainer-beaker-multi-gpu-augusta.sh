@@ -268,15 +268,7 @@ for i, arg in enumerate(modified_args):
 grpo_cmd += " " + " ".join(filtered_args)
 
 # Create a bash script as a single command string with S3 sync
-# Prepare S3 sync command for embedding in cleanup function
-# These will be expanded at runtime in the bash script
-if local_output_dir and s3_output_path:
-    # Use runtime variable expansion for the actual directory paths
-    actual_local_dir = local_output_dir.replace('$BEAKER_WORKLOAD_ID', '${BEAKER_WORKLOAD_ID}')
-    actual_s3_path = s3_output_path.replace('$BEAKER_WORKLOAD_ID', '${BEAKER_WORKLOAD_ID}')
-    s3_sync_cmd = f"s5cmd sync '{actual_local_dir}/' '{actual_s3_path}/'"
-else:
-    s3_sync_cmd = None
+# S3 sync will be handled directly in the cleanup function
 
 bash_script = f"""
 set -e
@@ -311,9 +303,9 @@ cleanup() {{
         ls -la "$ACTUAL_OUTPUT_DIR" | head -20
         
         {f'ACTUAL_S3_PATH="{s3_output_path.replace("$BEAKER_WORKLOAD_ID", "${BEAKER_WORKLOAD_ID}")}"' if s3_output_path else ''}
-        {f'echo "Syncing from $ACTUAL_OUTPUT_DIR to $ACTUAL_S3_PATH"' if s3_sync_cmd else ''}
-        {s3_sync_cmd if s3_sync_cmd else 'echo "No S3 sync configured"'}
-        {f'echo "S3 sync completed"' if s3_sync_cmd else ''}
+        {f'echo "Syncing from $ACTUAL_OUTPUT_DIR to $ACTUAL_S3_PATH"' if s3_output_path else ''}
+        {f's5cmd sync "$ACTUAL_OUTPUT_DIR/" "$ACTUAL_S3_PATH/"' if s3_output_path else 'echo "No S3 sync configured"'}
+        {f'echo "S3 sync completed"' if s3_output_path else ''}
     else
         echo "No output directory found at $ACTUAL_OUTPUT_DIR, skipping S3 sync"
     fi

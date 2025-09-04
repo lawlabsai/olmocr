@@ -13,7 +13,7 @@ from pathlib import Path
 import glob
 from functools import lru_cache
 from concurrent.futures import ThreadPoolExecutor
-from rapidfuzz import distance
+from rapidfuzz import fuzz
 import sys
 
 import torch
@@ -403,18 +403,8 @@ def bench_edit_distance_reward(prompts, completions: list[str] | list[list[dict]
             continue
         
         # Calculate edit distance
-        dist = distance.Levenshtein.distance(comp_text, reference)
-        
-        # Calculate maximum possible distance (length of longer string)
-        max_dist = max(len(comp_text), len(reference))
-        
-        # Calculate similarity (1.0 = perfect match, 0.0 = completely different)
-        if max_dist == 0:
-            similarity = 1.0  # Both empty strings
-        else:
-            similarity = 1.0 - (dist / max_dist)
-        
-        rewards.append(max(0.0, similarity))  # Ensure non-negative
+        similarity_ratio = fuzz.ratio(comp_text, reference) / 100.0
+        rewards.append(similarity_ratio)
     
     logger.info(f"Bench edit distance rewards range: [{min(rewards) if rewards else 0:.3f}, {max(rewards) if rewards else 0:.3f}]")
     return rewards
@@ -591,6 +581,94 @@ def reward_front_matter(prompts, completions: list[str] | list[list[dict]], clau
     
     logger.info(f"Front matter rewards summary: {zero_rewards} failed, {partial_rewards} partial, "
                 f"{perfect_rewards} perfect. Average: {avg_reward:.3f}")
+    
+    return rewards
+
+
+def reward_element_count(prompts, completions: list[str] | list[list[dict]], claude_original: list[Optional[str]] = None, **kwargs):
+    """
+    Reward function based on matching element counts between completion and claude_original.
+    
+    Counts HTML tables (<table>...</table>) and LaTeX math equations ($$...$$, \(...\), \[...\])
+    in both the completion and claude_original text, then calculates reward based on matches:
+    - 1.0: Both table count and math equation count match
+    - 0.5: One of the counts matches
+    - 0.0: Neither count matches
+    
+    Args:
+        prompts: List of prompts
+        completions: List of generated completions (model outputs)
+        claude_original: List of claude_original reference texts (one per completion)
+        **kwargs: Additional arguments
+        
+    Returns:
+        List of reward scores between 0.0 and 1.0
+    """
+    import re
+    
+    logger.info(f"Running element count reward function for {len(completions)} completions")
+    
+    rewards = []
+    
+    def count_elements(text: str) -> tuple[int, int]:
+        """Count HTML tables and LaTeX math equations in text."""
+        # Count HTML tables
+        table_pattern = r'<table\b[^>]*>.*?</table>'
+        tables = re.findall(table_pattern, text, re.DOTALL | re.IGNORECASE)
+        table_count = len(tables)
+        
+        # Count LaTeX math equations using the specified patterns
+        math_patterns = [
+            r"\$\$(.+?)\$\$",  # $$...$$
+            r"\\\((.+?)\\\)",  # \(...\)
+            r"\\\[(.+?)\\\]",  # \[...\]
+        ]
+        
+        math_count = 0
+        for pattern in math_patterns:
+            matches = re.findall(pattern, text, re.DOTALL)
+            math_count += len(matches)
+        
+        return table_count, math_count
+    
+    for i, completion in enumerate(completions):
+        # Extract text from completion
+        if isinstance(completion, list):
+            comp_text = completion[0]["content"] if completion else ""
+        elif isinstance(completion, str):
+            comp_text = completion
+        else:
+            comp_text = ""
+        
+        # Get the corresponding claude_original reference
+        reference = claude_original[i] if i < len(claude_original) else None
+        
+        if reference is None:
+            logger.warning(f"No claude_original reference for completion {i}")
+            rewards.append(0.0)
+            continue
+        
+        # Count elements in both texts
+        comp_table_count, comp_math_count = count_elements(comp_text)
+        ref_table_count, ref_math_count = count_elements(reference)
+        
+        # Calculate reward based on matches
+        matches = 0
+        if comp_table_count == ref_table_count:
+            matches += 1
+        if comp_math_count == ref_math_count:
+            matches += 1
+        
+        # Map matches to reward: 0 matches -> 0.0, 1 match -> 0.5, 2 matches -> 1.0
+        reward = matches * 0.5
+        
+        logger.debug(f"Completion {i}: tables (comp={comp_table_count}, ref={ref_table_count}), "
+                    f"math (comp={comp_math_count}, ref={ref_math_count}), reward={reward:.1f}")
+        
+        rewards.append(reward)
+    
+    logger.info(f"Element count rewards - avg: {sum(rewards)/len(rewards) if rewards else 0:.3f}, "
+                f"range: [{min(rewards) if rewards else 0:.3f}, {max(rewards) if rewards else 0:.3f}]")
     
     return rewards
 
@@ -798,6 +876,14 @@ def main():
         help="Use front matter validation and field matching reward with optional weight (default: 1.0)"
     )
     parser.add_argument(
+        "--reward_element_count",
+        nargs='?',
+        const=1.0,
+        type=float,
+        default=None,
+        help="Use element count matching reward (tables and math equations) with optional weight (default: 1.0)"
+    )
+    parser.add_argument(
         "--vllm_mode",
         type=str,
         default="colocate",
@@ -918,8 +1004,14 @@ def main():
         reward_names.append("front_matter")
         logger.info(f"Added front matter validation reward function with weight {args.reward_front_matter}")
     
+    if args.reward_element_count is not None:
+        reward_funcs.append(reward_element_count)
+        reward_weights.append(args.reward_element_count)
+        reward_names.append("element_count")
+        logger.info(f"Added element count matching reward function with weight {args.reward_element_count}")
+    
     if not reward_funcs:
-        logger.error("No reward function specified. Use at least one of: --reward_bench, --reward_medoid, --reward_bench_edit_distance, --reward_front_matter")
+        logger.error("No reward function specified. Use at least one of: --reward_bench, --reward_medoid, --reward_bench_edit_distance, --reward_front_matter, --reward_element_count")
         return
     
     # Log summary of reward configuration
@@ -983,9 +1075,9 @@ def main():
         trainer.train()
         
         # Save final model
-        logger.info(f"Saving final model to {args.output_dir}")
+        logger.info(f"Saving final model to {args.output_dir}/step-final")
         trainer.save_model()
-        processor.save_pretrained(args.output_dir)
+        processor.save_pretrained(os.path.join(args.output_dir, "step-final"))
         
         logger.info("Training completed successfully!")
         
