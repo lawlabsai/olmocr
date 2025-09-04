@@ -896,6 +896,12 @@ def main():
         default=1,
         help="Number of GRPO iterations (default: 1)"
     )
+    parser.add_argument(
+        "--num_generations",
+        type=int,
+        default=8,
+        help="Number of generations per prompt (default: 8)"
+    )
     
     args = parser.parse_args()
     
@@ -1050,6 +1056,7 @@ def main():
         importance_sampling_level=args.importance_sampling_level,
         reward_weights=reward_weights,
         num_iterations=args.num_iterations,
+        num_generations=args.num_generations,
 
         # Vllm setup to speed up generation
         use_vllm=(args.vllm_mode != "none"),
