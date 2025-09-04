@@ -206,13 +206,18 @@ for i, arg in enumerate(modified_args):
         break
 
 # Build the GRPO training command with forwarded arguments
-# Force --vllm_mode server
 grpo_cmd = f"CUDA_VISIBLE_DEVICES={training_gpu_str} accelerate launch --use_deepspeed --zero_stage 2 --num_processes {num_training_processes} --gradient_accumulation_steps {grad_acc_steps} -m olmocr.train.grpo_train"
 
-# Add --vllm_mode server if not already in arguments
+# Check if --vllm_mode is specified in arguments
 arg_str = " ".join(modified_args)
-if "--vllm_mode" not in arg_str:
-    grpo_cmd += " --vllm_mode server"
+vllm_mode = "server"  # Default for multi-GPU
+for i, arg in enumerate(modified_args):
+    if arg == "--vllm_mode" and i + 1 < len(modified_args):
+        vllm_mode = modified_args[i + 1]
+        break
+
+# Always add --vllm_mode (since we filter it out later)
+grpo_cmd += f" --vllm_mode {vllm_mode}"
 
 # Check if certain required arguments are in the provided args, add defaults if not
 if "--train_bench_data_folder" not in arg_str:
@@ -222,18 +227,18 @@ if "--eval_bench_data_folder" not in arg_str:
 # Store output folder name for S3 sync
 if "--output_dir" not in arg_str:
     # Use local directory for output
-    beaker_workload_id = "${BEAKER_WORKLOAD_ID}"
+    # Note: We'll use the actual BEAKER_WORKLOAD_ID environment variable at runtime
     if exp_name:
         # For multi-GPU runs, add suffix to distinguish
-        output_folder_name = f"{exp_name}-multigpu-{beaker_workload_id}"
+        output_folder_name = f"{exp_name}-multigpu-$BEAKER_WORKLOAD_ID"
     else:
-        output_folder_name = f"multigpu-{beaker_workload_id}"
+        output_folder_name = f"multigpu-$BEAKER_WORKLOAD_ID"
     
-    # Local output directory
+    # Local output directory (with placeholder for runtime expansion)
     local_output_dir = f"/tmp/checkpoints/{output_folder_name}"
     grpo_cmd += f" --output_dir {local_output_dir}"
     
-    # S3 destination
+    # S3 destination (with placeholder for runtime expansion)
     s3_output_path = f"s3://ai2-oe-data/jakep/olmocr-grpo-checkpoints/{output_folder_name}"
 else:
     # Extract output dir from args to determine S3 sync path
@@ -264,13 +269,24 @@ grpo_cmd += " " + " ".join(filtered_args)
 
 # Create a bash script as a single command string with S3 sync
 # Prepare S3 sync command for embedding in cleanup function
+# These will be expanded at runtime in the bash script
 if local_output_dir and s3_output_path:
-    s3_sync_cmd = f"s5cmd sync '{local_output_dir}/*' '{s3_output_path}/'"
+    # Use runtime variable expansion for the actual directory paths
+    actual_local_dir = local_output_dir.replace('$BEAKER_WORKLOAD_ID', '${BEAKER_WORKLOAD_ID}')
+    actual_s3_path = s3_output_path.replace('$BEAKER_WORKLOAD_ID', '${BEAKER_WORKLOAD_ID}')
+    s3_sync_cmd = f"s5cmd sync '{actual_local_dir}/' '{actual_s3_path}/'"
 else:
     s3_sync_cmd = None
 
 bash_script = f"""
 set -e
+
+# Ensure BEAKER_WORKLOAD_ID is available (Beaker sets this automatically)
+if [ -z "$BEAKER_WORKLOAD_ID" ]; then
+    echo "Warning: BEAKER_WORKLOAD_ID not set, using timestamp as fallback"
+    export BEAKER_WORKLOAD_ID=$(date +%Y%m%d-%H%M%S)
+fi
+echo "BEAKER_WORKLOAD_ID: $BEAKER_WORKLOAD_ID"
 
 # Define cleanup function that will always run
 cleanup() {{
@@ -286,13 +302,20 @@ cleanup() {{
     
     # Always sync to S3 if output directory exists
     echo "Checking for outputs to sync to S3..."
-    if [ -d "{local_output_dir if local_output_dir else '/tmp/checkpoints'}" ]; then
-        echo "Output directory exists, syncing to S3..."
-        {f'echo "Syncing from {local_output_dir} to {s3_output_path}"' if s3_sync_cmd else ''}
+    # Expand BEAKER_WORKLOAD_ID at runtime
+    ACTUAL_OUTPUT_DIR="{local_output_dir.replace('$BEAKER_WORKLOAD_ID', '${BEAKER_WORKLOAD_ID}') if local_output_dir else '/tmp/checkpoints'}"
+    if [ -d "$ACTUAL_OUTPUT_DIR" ]; then
+        echo "Output directory exists at $ACTUAL_OUTPUT_DIR"
+        # List contents for verification
+        echo "Directory contents:"
+        ls -la "$ACTUAL_OUTPUT_DIR" | head -20
+        
+        {f'ACTUAL_S3_PATH="{s3_output_path.replace("$BEAKER_WORKLOAD_ID", "${BEAKER_WORKLOAD_ID}")}"' if s3_output_path else ''}
+        {f'echo "Syncing from $ACTUAL_OUTPUT_DIR to $ACTUAL_S3_PATH"' if s3_sync_cmd else ''}
         {s3_sync_cmd if s3_sync_cmd else 'echo "No S3 sync configured"'}
         {f'echo "S3 sync completed"' if s3_sync_cmd else ''}
     else
-        echo "No output directory found, skipping S3 sync"
+        echo "No output directory found at $ACTUAL_OUTPUT_DIR, skipping S3 sync"
     fi
     
     if [ $EXIT_CODE -eq 0 ]; then
@@ -310,8 +333,10 @@ trap cleanup EXIT
 # Setup commands
 {" && ".join(setup_commands)}
 
-# Create output directory
-mkdir -p {local_output_dir if local_output_dir else "/tmp/checkpoints"}
+# Create output directory (with runtime variable expansion)
+ACTUAL_OUTPUT_DIR="{local_output_dir.replace('$BEAKER_WORKLOAD_ID', '${BEAKER_WORKLOAD_ID}') if local_output_dir else '/tmp/checkpoints'}"
+echo "Creating output directory: $ACTUAL_OUTPUT_DIR"
+mkdir -p "$ACTUAL_OUTPUT_DIR"
 
 # Start VLLM server in background (output goes to console)
 echo 'Starting VLLM server on GPU {vllm_gpu} as background process...'
@@ -332,9 +357,14 @@ for i in {{1..60}}; do
     fi
 done
 
-# Run training
+# Run training (expand BEAKER_WORKLOAD_ID in the command)
 echo 'Starting GRPO training on GPUs {training_gpu_str}...'
-{grpo_cmd}
+echo 'BEAKER_WORKLOAD_ID: '$BEAKER_WORKLOAD_ID
+# Replace placeholder with actual workload ID in the command
+GRPO_CMD="{grpo_cmd}"
+GRPO_CMD="${{GRPO_CMD//\$BEAKER_WORKLOAD_ID/$BEAKER_WORKLOAD_ID}}"
+echo "Running command: $GRPO_CMD"
+eval "$GRPO_CMD"
 
 echo 'Training completed successfully!'
 """

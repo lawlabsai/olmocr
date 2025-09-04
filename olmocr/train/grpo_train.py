@@ -949,6 +949,7 @@ def main():
         remove_unused_columns=False,
         bf16=True,
         dataloader_num_workers=0,
+        dataloader_drop_last=True,
         
         # GRPO-specific parameters
         loss_type=args.loss_type,
