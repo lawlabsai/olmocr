@@ -868,6 +868,7 @@ class BaselineTest(BasePDFTest):
     """
 
     max_length: Optional[int] = None # Used to implement blank page checks
+    max_length_skips_image_alt_tags: bool = False
 
     max_repeats: int = 30
     check_disallowed_characters: bool = True
@@ -877,6 +878,11 @@ class BaselineTest(BasePDFTest):
 
         # If this a blank page check, then it short circuits the rest of the checks
         if self.max_length is not None:
+            if self.max_length_skips_image_alt_tags:
+                # Remove markdown image tags like ![alt text](image.png) from the text length count
+                content_for_length_check = re.sub(r'!\[.*?\]\(.*?\)', '', content)
+                base_content_len = len("".join(c for c in content_for_length_check if c.isalnum()).strip())
+
             if base_content_len > self.max_length:
                 return False, f"{base_content_len} characters were output for a page we expected to be blank"
             else:
