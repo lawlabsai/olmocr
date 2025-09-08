@@ -13,10 +13,8 @@ Usage:
 """
 
 import argparse
-import json
 import os
 import random
-import shutil
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
@@ -112,6 +110,11 @@ def check_for_table(pdf_path: str, page_num: int, api_key: str) -> Optional[bool
 
         # Parse the structured response
         parsed_response = response.choices[0].message.parsed
+        
+        if parsed_response is None:
+            print(f"Failed to parse response for {pdf_path} page {page_num}")
+            return None
+            
         has_table = parsed_response.contains_table
         
         if has_table:
