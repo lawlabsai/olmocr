@@ -258,6 +258,9 @@ def prepare_checkpoints(sources: list[str], dest_path: str) -> None:
     """Prepare OlmOCR checkpoint(s) for deployment, with support for souping."""
     print(f"Preparing {'souped ' if len(sources) > 1 else ''}checkpoint from {len(sources)} source(s) to {dest_path}")
 
+    sources = [source.rstrip("/") for source in sources]
+    dest_path = dest_path.rstrip("/")
+    
     # Detect architectures
     architectures = []
     for source in sources:
