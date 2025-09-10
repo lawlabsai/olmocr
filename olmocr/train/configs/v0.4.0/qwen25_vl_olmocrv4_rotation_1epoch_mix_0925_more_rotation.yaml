@@ -2,7 +2,7 @@
 
 # Project metadata
 project_name: olmocr-qwen-vl-training
-run_name: qwen2.5-vl-7b-olmocrv4_1epoch_promptv4_filtering_mix0925
+run_name: qwen2.5-vl-7b-olmocrv4_1epoch_promptv4_mix0925_more_rotation
 
 # Model configuration
 model:
@@ -34,11 +34,10 @@ dataset:
           front_matter_class: PageResponse
         - name: FilterOutRotatedDocuments
         - name: ReformatLatexBoldItalic
-        - name: DatasetTextRuleFilter
         - name: PDFRenderer
           target_longest_image_dim: 1288
         - name: RotationAugmentation
-          probability: 0.002
+          probability: 0.01
         - name: NewYamlFinetuningPromptWithNoAnchoring
         - name: FrontMatterOutputFormat
         - name: InstructUserMessages
@@ -49,11 +48,11 @@ dataset:
     - name: processed_00_documents_train_s2pdf
       root_dir: /data/olmOCR-mix-0925/processed_00_documents_train_s2pdf/
       pipeline: *basic_pipeline
-    - name: processed_national_archives
-      root_dir: /data/olmOCR-mix-0925/processed_national_archives/
+    - name: processed_02_loc_transcripts
+      root_dir: /data/olmOCR-mix-0925/processed_02_loc_transcripts/
       pipeline: *basic_pipeline
-    - name: processed_loc_transcripts
-      root_dir: /data/olmOCR-mix-0925/processed_loc_transcripts/
+    - name: processed_03_national_archives
+      root_dir: /data/olmOCR-mix-0925/processed_03_national_archives/
       pipeline: *basic_pipeline            
 
   eval:
@@ -63,6 +62,12 @@ dataset:
     - name: processed_01_books_eval_iabooks
       root_dir: /data/olmOCR-mix-0925/processed_01_books_eval_iabooks/
       pipeline: *basic_pipeline
+    - name: processed_02_loc_transcripts_eval
+      root_dir: /data/olmOCR-mix-0925/processed_02_loc_transcripts_eval/
+      pipeline: *basic_pipeline
+    - name: processed_03_national_archives_eval
+      root_dir: /data/olmOCR-mix-0925/processed_03_national_archives_eval/
+      pipeline: *basic_pipeline            
 
 
 # Training configuration
