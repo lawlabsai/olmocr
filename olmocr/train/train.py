@@ -271,10 +271,10 @@ def main():
 
     # Load model
     logger.info(f"Loading model: {config.model.name}")
-    if "Qwen2.5-VL" in config.model.name:
+    if "qwen2.5-vl" in config.model.name.lower():
         model_class = Qwen2_5_VLForConditionalGeneration
         model = model_class.from_pretrained(config.model.name, **model_init_kwargs)
-    elif "Qwen2-VL" in config.model.name:
+    elif "qwen2-vl" in config.model.name.lower():
         model_class = Qwen2VLForConditionalGeneration
         model = model_class.from_pretrained(config.model.name, **model_init_kwargs)
     else:
