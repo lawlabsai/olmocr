@@ -200,6 +200,47 @@
         .katex-display {
             margin: 1em 0;
         }
+        
+        /* Metadata styles */
+        .metadata-container {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            color: #495057;
+        }
+        
+        .metadata-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+        
+        .metadata-item {
+            display: flex;
+            align-items: baseline;
+        }
+        
+        .metadata-label {
+            font-weight: 600;
+            color: #6c757d;
+            margin-right: 5px;
+            min-width: fit-content;
+        }
+        
+        .metadata-value {
+            color: #212529;
+            word-break: break-word;
+        }
+        
+        .metadata-source-file {
+            grid-column: 1 / -1;
+            margin-top: 5px;
+            padding-top: 10px;
+            border-top: 1px solid #dee2e6;
+        }
 
     </style>
     
@@ -207,8 +248,7 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     
     <!-- KaTeX JavaScript -->
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUb0ZY0l8" crossorigin="anonymous"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" integrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUb0ZY0l8" crossorigin="anonymous"></script>
 </head>
 <body>
     <div class="document">
@@ -216,6 +256,66 @@
             <button class="toggle-button" id="toggleView">
                 <span id="toggleText">📝 Markdown View</span>
             </button>
+        </div>
+        
+        <!-- Metadata Section -->
+        <div class="metadata-container">
+            <div class="metadata-grid">
+                {% if metadata.source %}
+                <div class="metadata-item">
+                    <span class="metadata-label">Source:</span>
+                    <span class="metadata-value">{{ metadata.source }}</span>
+                </div>
+                {% endif %}
+                {% if metadata.olmocr_version %}
+                <div class="metadata-item">
+                    <span class="metadata-label">OlmOCR:</span>
+                    <span class="metadata-value">v{{ metadata.olmocr_version }}</span>
+                </div>
+                {% endif %}
+                {% if metadata.created %}
+                <div class="metadata-item">
+                    <span class="metadata-label">Created:</span>
+                    <span class="metadata-value">{{ metadata.created }}</span>
+                </div>
+                {% endif %}
+                {% if metadata.pdf_pages %}
+                <div class="metadata-item">
+                    <span class="metadata-label">Pages:</span>
+                    <span class="metadata-value">{{ metadata.pdf_pages }}</span>
+                </div>
+                {% endif %}
+                {% if metadata.tokens_in %}
+                <div class="metadata-item">
+                    <span class="metadata-label">Tokens In:</span>
+                    <span class="metadata-value">{{ metadata.tokens_in }}</span>
+                </div>
+                {% endif %}
+                {% if metadata.tokens_out %}
+                <div class="metadata-item">
+                    <span class="metadata-label">Tokens Out:</span>
+                    <span class="metadata-value">{{ metadata.tokens_out }}</span>
+                </div>
+                {% endif %}
+                {% if attributes.primary_language %}
+                <div class="metadata-item">
+                    <span class="metadata-label">Language:</span>
+                    <span class="metadata-value">{{ attributes.primary_language[0] }}</span>
+                </div>
+                {% endif %}
+                {% if attributes.rotation_correction %}
+                <div class="metadata-item">
+                    <span class="metadata-label">Rotation:</span>
+                    <span class="metadata-value">{{ attributes.rotation_correction[0] }}°</span>
+                </div>
+                {% endif %}
+                {% if metadata.source_file %}
+                <div class="metadata-item metadata-source-file">
+                    <span class="metadata-label">File:</span>
+                    <span class="metadata-value">{{ metadata.source_file }}</span>
+                </div>
+                {% endif %}
+            </div>
         </div>
         
         {% for page in pages %}
@@ -249,65 +349,41 @@
             mangle: false
         });
         
-        // Function to render LaTeX in an element
-        function renderLatex(element) {
-            renderMathInElement(element, {
-                delimiters: [
-                    {left: '$$', right: '$$', display: true},
-                    {left: '$', right: '$', display: false},
-                    {left: '\\[', right: '\\]', display: true},
-                    {left: '\\(', right: '\\)', display: false}
-                ],
-                throwOnError: false,
-                errorColor: '#cc0000',
-                strict: false,
-                trust: true
+        // Function to render LaTeX expressions to HTML
+        function renderLatexToHtml(text) {
+            const patterns = [
+                { regex: /\$\$([\s\S]+?)\$\$/g, display: true },   // Display math $$...$$
+                { regex: /\\\[([\s\S]+?)\\\]/g, display: true },   // Display math \[...\]
+                { regex: /\$([^\$\n]+?)\$/g, display: false },     // Inline math $...$
+                { regex: /\\\((.+?)\\\)/g, display: false }        // Inline math \(...\)
+            ];
+            
+            let result = text;
+            patterns.forEach(({ regex, display }) => {
+                result = result.replace(regex, (match, latex) => {
+                    try {
+                        return katex.renderToString(latex, {
+                            displayMode: display,
+                            throwOnError: false
+                        });
+                    } catch (e) {
+                        return match; // Return original if error
+                    }
+                });
             });
+            return result;
         }
         
         // Function to render markdown and LaTeX
         function renderMarkdown() {
-            const textElements = document.querySelectorAll('.text-content');
-            
-            textElements.forEach(element => {
+            document.querySelectorAll('.text-content').forEach(element => {
                 const rawText = element.getAttribute('data-raw-text');
                 
                 if (isMarkdownView) {
-                    // Render as markdown
                     element.className = 'text-content markdown';
-                    
-                    // Parse markdown but protect LaTeX delimiters
-                    let processedText = rawText;
-                    
-                    // Temporarily replace LaTeX delimiters to protect them from markdown parsing
-                    const latexPatterns = [
-                        {pattern: /\$\$(.+?)\$\$/gs, placeholder: '%%%DISPLAY_LATEX_$1%%%'},
-                        {pattern: /\$(.+?)\$/g, placeholder: '%%%INLINE_LATEX_$1%%%'},
-                        {pattern: /\\\[(.+?)\\\]/gs, placeholder: '%%%DISPLAY_LATEX2_$1%%%'},
-                        {pattern: /\\\((.+?)\\\)/g, placeholder: '%%%INLINE_LATEX2_$1%%%'}
-                    ];
-                    
-                    latexPatterns.forEach(({pattern, placeholder}) => {
-                        processedText = processedText.replace(pattern, (match, p1) => {
-                            return placeholder.replace('$1', p1);
-                        });
-                    });
-                    
-                    // Parse markdown
-                    let html = marked.parse(processedText);
-                    
-                    // Restore LaTeX delimiters
-                    html = html.replace(/%%%DISPLAY_LATEX_(.+?)%%%/gs, '$$$$1$$');
-                    html = html.replace(/%%%INLINE_LATEX_(.+?)%%%/g, '$$1$');
-                    html = html.replace(/%%%DISPLAY_LATEX2_(.+?)%%%/gs, '\\[$1\\]');
-                    html = html.replace(/%%%INLINE_LATEX2_(.+?)%%%/g, '\\($1\\)');
-                    
-                    element.innerHTML = html;
-                    
-                    // Render LaTeX with KaTeX
-                    renderLatex(element);
+                    // Render LaTeX first, then markdown
+                    element.innerHTML = marked.parse(renderLatexToHtml(rawText));
                 } else {
-                    // Display raw text
                     element.className = 'text-content raw';
                     element.innerHTML = '<pre>' + rawText + '</pre>';
                 }

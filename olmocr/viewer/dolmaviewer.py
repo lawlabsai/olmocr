@@ -1,6 +1,5 @@
 import argparse
 import glob
-import html
 import json
 import os
 import tempfile
@@ -47,6 +46,11 @@ def process_document(data, s3_client, template, output_dir):
     attributes = data.get("attributes", {})
     pdf_page_numbers = attributes.get("pdf_page_numbers", [])
     metadata = data.get("metadata", {})
+    
+    # Extract additional fields for display
+    source = data.get("source", "")
+    added = data.get("added", "")
+    created = data.get("created", "")
     source_file = metadata.get("Source-File")
 
     # Generate base64 image of the corresponding PDF page
@@ -64,8 +68,13 @@ def process_document(data, s3_client, template, output_dir):
             start_index, end_index, page_num = span
             page_text = text[start_index:end_index]
 
-            # Just escape HTML for safe rendering, markdown conversion will happen client-side
-            page_text = html.escape(page_text, quote=False)
+            # Escape only dangerous HTML characters, preserving curly braces for LaTeX
+            # Don't escape curly braces {} as they're needed for LaTeX
+            page_text = page_text.replace('&', '&amp;')
+            page_text = page_text.replace('<', '&lt;')
+            page_text = page_text.replace('>', '&gt;')
+            page_text = page_text.replace('"', '&quot;')
+            page_text = page_text.replace("'", '&#x27;')
 
             base64_image = render_pdf_to_base64webp(local_pdf.name, page_num)
 
@@ -84,9 +93,28 @@ def process_document(data, s3_client, template, output_dir):
         bucket_name, key_name = parse_s3_path(source_file)
         s3_link = generate_presigned_url(s3_client, bucket_name, key_name)
 
+    # Prepare metadata for display
+    display_metadata = {
+        "id": id_,
+        "source": source,
+        "added": added,
+        "created": created,
+        "pdf_pages": metadata.get("pdf-total-pages", ""),
+        "tokens_in": metadata.get("total-input-tokens", ""),
+        "tokens_out": metadata.get("total-output-tokens", ""),
+        "olmocr_version": metadata.get("olmocr-version", ""),
+        "source_file": source_file
+    }
+    
     # Render the HTML using the Jinja template
     try:
-        html_content = template.render(id=id_, pages=pages, s3_link=s3_link)
+        html_content = template.render(
+            id=id_, 
+            pages=pages, 
+            s3_link=s3_link,
+            metadata=display_metadata,
+            attributes=attributes
+        )
     except Exception as e:
         print(f"Error rendering HTML for document ID {id_}: {e}")
         return
