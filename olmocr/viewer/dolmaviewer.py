@@ -7,7 +7,6 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import boto3
-import markdown2
 import smart_open
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError
 from jinja2 import Template
@@ -65,9 +64,8 @@ def process_document(data, s3_client, template, output_dir):
             start_index, end_index, page_num = span
             page_text = text[start_index:end_index]
 
-            # Detect and convert Markdown to HTML
-            page_text = html.escape(page_text, quote=True).replace("&lt;br&gt;", "<br>")
-            page_text = markdown2.markdown(page_text, extras=["tables"])
+            # Just escape HTML for safe rendering, markdown conversion will happen client-side
+            page_text = html.escape(page_text, quote=False)
 
             base64_image = render_pdf_to_base64webp(local_pdf.name, page_num)
 
