@@ -1218,6 +1218,7 @@ async def main():
         print("PDF filtering enabled")
 
     # Reservoir sampling implementation
+    random_gen = random.Random(42)
     pdf_paths = []
     with open(args.input_list, "r") as f:
         for i, line in enumerate(tqdm(f)):
@@ -1229,15 +1230,14 @@ async def main():
                 pdf_paths.append(line)
             else:
                 # Randomly replace elements with decreasing probability
-                j = random.randint(0, i)
+                j = random_gen.randint(0, i)
                 if j < 100000:
                     pdf_paths[j] = line
 
     print(f"Found {len(pdf_paths)} PDF paths in input list")
 
     # Shuffle and limit to max_tests
-    random.seed(42)
-    random.shuffle(pdf_paths)
+    random_gen.shuffle(pdf_paths)
     pdf_paths = pdf_paths[: args.max_tests]
 
     # Initialize the JSONL file in bench_data folder with the specified name
