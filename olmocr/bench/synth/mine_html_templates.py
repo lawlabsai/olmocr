@@ -368,7 +368,7 @@ async def generate_html_from_image(client, image_base64):
                             "4. Render any math equations and Latex inline using either \\[ \\] or \\( \\) delimeters.\n"
                             "5. CRITICAL: If the document has a multi-column layout, you MUST preserve the exact same number of columns in your HTML. Use CSS flexbox or grid to create the columns.\n"
                             "6. Focus on creating valid, accessible HTML that preserves the appearance and formatting of the original page as closely as possible.\n"
-                            f"7. The webpage will be viewed with a fixed viewport size of {png_width // 2} pixels wide by {png_height // 2} pixels tall. You can add @page and @media print css styles to make the printed version match the original document.\n\n"
+                            f"7. The webpage will be viewed with a fixed viewport size of {png_width // 2} pixels wide by {png_height // 2} pixels tall.\n"
                             "8. For multi-column layouts, use explicit CSS. The most important aspect is preserving the column structure of the original document - this is critical.\n\n"
                             "Enclose your HTML in a ```html code block.",
                         },
@@ -450,6 +450,34 @@ async def render_pdf_with_playwright(html_content, output_pdf_path, png_width, p
         bool: True if rendering was successful with exactly one page, False otherwise
     """
     scale_factors = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5]  # Try these scale factors in order
+    
+    # Determine page format based on PNG dimensions
+    # Define thresholds with some tolerance (±5%)
+    aspect_ratio = png_width / png_height
+    
+    # Letter Portrait: 8.5" x 11" (aspect ratio ~0.77)
+    # Letter Landscape: 11" x 8.5" (aspect ratio ~1.29)
+    # A4 Portrait: 210mm x 297mm (aspect ratio ~0.71)
+    # A4 Landscape: 297mm x 210mm (aspect ratio ~1.41)
+    
+    pdf_options = {
+        'path': output_pdf_path,
+        'print_background': True,
+    }
+    
+    if 0.73 <= aspect_ratio <= 0.81:  # Letter Portrait (8.5/11 = 0.77)
+        pdf_options['width'] = '8.5in'
+        pdf_options['height'] = '11in'
+    elif 1.23 <= aspect_ratio <= 1.35:  # Letter Landscape (11/8.5 = 1.29)
+        pdf_options['width'] = '11in'
+        pdf_options['height'] = '8.5in'
+    elif 0.67 <= aspect_ratio <= 0.73:  # A4 Portrait (210/297 = 0.71)
+        pdf_options['width'] = '210mm'
+        pdf_options['height'] = '297mm'
+    elif 1.36 <= aspect_ratio <= 1.47:  # A4 Landscape (297/210 = 1.41)
+        pdf_options['width'] = '297mm'
+        pdf_options['height'] = '210mm'
+    # else: Other - leave width and height unset
 
     for scale in scale_factors:
         try:
@@ -487,11 +515,9 @@ async def render_pdf_with_playwright(html_content, output_pdf_path, png_width, p
                 )
 
                 # Save as PDF with formatting options
-                await page.pdf(
-                    path=output_pdf_path,
-                    scale=scale,
-                    print_background=True,
-                )
+                # Add scale to the options
+                pdf_options['scale'] = scale
+                await page.pdf(**pdf_options)
 
                 await browser.close()
 
