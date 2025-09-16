@@ -8,6 +8,7 @@ import random
 import re
 import subprocess
 import uuid
+import glob
 from collections import defaultdict
 from typing import Dict, List
 
@@ -1220,19 +1221,23 @@ async def main():
     # Reservoir sampling implementation
     random_gen = random.Random(42)
     pdf_paths = []
-    with open(args.input_list, "r") as f:
-        for i, line in enumerate(tqdm(f)):
-            line = line.strip()
-            if not line:
-                continue
 
-            if i < 100000:
-                pdf_paths.append(line)
-            else:
-                # Randomly replace elements with decreasing probability
-                j = random_gen.randint(0, i)
-                if j < 100000:
-                    pdf_paths[j] = line
+    if os.path.isdir(args.input_list):
+        pdf_paths = list(glob.glob(os.path.join(args.input_list, "*.pdf"), recursive=True))
+    else:
+        with open(args.input_list, "r") as f:
+            for i, line in enumerate(tqdm(f)):
+                line = line.strip()
+                if not line:
+                    continue
+
+                if i < 100000:
+                    pdf_paths.append(line)
+                else:
+                    # Randomly replace elements with decreasing probability
+                    j = random_gen.randint(0, i)
+                    if j < 100000:
+                        pdf_paths[j] = line
 
     print(f"Found {len(pdf_paths)} PDF paths in input list")
 
