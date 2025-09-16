@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -514,7 +515,7 @@ async def render_pdf_with_playwright(html_content, output_pdf_path, png_width, p
     return False
 
 
-def generate_tests_from_html(html_content: str, pdf_id: str, page_num: int, verbose_table_testing: bool = False) -> List[Dict]:
+def generate_tests_from_html(html_content: str, pdf_id: str, page_num: int, random_gen: random.Random, verbose_table_testing: bool = False) -> List[Dict]:
     """
     Generate tests from HTML content parsed from the PDF.
 
@@ -679,11 +680,11 @@ def generate_tests_from_html(html_content: str, pdf_id: str, page_num: int, verb
         else:
             cell_positions = [
                 (i, j)
-                for i in random.sample(non_header_rows, min(3, len(non_header_rows)))
-                for j in random.sample(non_header_cols, min(2, len(non_header_cols)))
+                for i in random_gen.sample(non_header_rows, min(3, len(non_header_rows)))
+                for j in random_gen.sample(non_header_cols, min(2, len(non_header_cols)))
             ]
 
-        random.shuffle(cell_positions)
+        random_gen.shuffle(cell_positions)
 
         # Create tests for each selected cell
         for row_idx, col_idx in cell_positions:
@@ -844,7 +845,7 @@ def generate_tests_from_html(html_content: str, pdf_id: str, page_num: int, verb
 
     # Add a few random ordering tests
     all_indexes = list(range(len(sentences)))
-    random.shuffle(all_indexes)
+    random_gen.shuffle(all_indexes)
     random_pairs = [(all_indexes[i * 2], all_indexes[i * 2 + 1]) for i in range(len(all_indexes) // 2)]
     random_pairs = [(min(i, j), max(i, j)) for (i, j) in random_pairs]
 
@@ -1023,6 +1024,15 @@ async def process_pdf(pdf_info, args, client, pdf_filter=None):
     if pdf_filter and pdf_filter.filter_out_pdf(local_pdf_path):
         print(f"PDF filtered out: {pdf_path}")
         return None
+    
+    # Seed with SHA1 hash of PDF contents for reproducibility
+    with open(local_pdf_path, 'rb') as f:
+        pdf_content = f.read()
+        pdf_hash = hashlib.sha1(pdf_content).hexdigest()
+    
+    # Use the first 8 characters of the hash as an integer seed
+    seed = int(pdf_hash[:8], 16)
+    random_generator = random.Random(seed)
 
     try:
         # Get page count using pypdf
@@ -1034,7 +1044,7 @@ async def process_pdf(pdf_info, args, client, pdf_filter=None):
             return None
 
         # Select a random page
-        page_num = random.randint(1, num_pages)
+        page_num = random_generator.randint(1, num_pages)
 
         # Render the page as a base64 PNG (run in thread pool since it's blocking I/O)
         loop = asyncio.get_event_loop()
@@ -1135,7 +1145,7 @@ async def process_pdf(pdf_info, args, client, pdf_filter=None):
 
         # Generate tests from the HTML content
         # Use the playwright rendered PDF path for tests
-        tests = generate_tests_from_html(html_content, pdf_id, page_num, verbose_table_testing)
+        tests = generate_tests_from_html(html_content, pdf_id, page_num, random_generator, verbose_table_testing)
 
         # Update the PDF path in all tests to use the playwright rendered PDF with the specified name prefix
         for test in tests:
