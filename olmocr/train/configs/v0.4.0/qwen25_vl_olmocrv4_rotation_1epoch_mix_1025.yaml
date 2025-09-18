@@ -37,7 +37,7 @@ dataset:
         - name: PDFRenderer
           target_longest_image_dim: 1288
         - name: RotationAugmentation
-          probability: 0.01
+          probability: 0.02
         - name: NewYamlFinetuningPromptWithNoAnchoring
         - name: FrontMatterOutputFormat
         - name: InstructUserMessages
