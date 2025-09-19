@@ -192,15 +192,29 @@ async def process_pdfs(config, pdf_directory, data_directory, repeats, remove_te
             if limited_tasks:
                 completed = 0
                 with tqdm(total=len(limited_tasks), desc=f"Processing {candidate}") as pbar:
-                    for task in asyncio.as_completed(limited_tasks):
-                        try:
-                            result = await task
-                            if result:
-                                completed += 1
-                        except Exception as e:
-                            print(f"Task failed: {e}")
-                        finally:
-                            pbar.update(1)
+                    # When parallel=0, tasks complete synchronously and we need to handle them differently
+                    if max_parallel == 0:
+                        # Process tasks sequentially with immediate progress updates
+                        for task in limited_tasks:
+                            try:
+                                result = await task
+                                if result:
+                                    completed += 1
+                            except Exception as e:
+                                print(f"Task failed: {e}")
+                            finally:
+                                pbar.update(1)
+                    else:
+                        # Use as_completed for parallel processing
+                        for task in asyncio.as_completed(limited_tasks):
+                            try:
+                                result = await task
+                                if result:
+                                    completed += 1
+                            except Exception as e:
+                                print(f"Task failed: {e}")
+                            finally:
+                                pbar.update(1)
 
                 print(f"Completed {completed} out of {len(limited_tasks)} tasks for {candidate}")
     finally:
