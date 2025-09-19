@@ -27,6 +27,7 @@ def run_paddlepaddle(
     output = pipeline.predict(pdf_path)
     for cur_page_0_indexed, res in enumerate(output):
         if cur_page_0_indexed == page_num - 1:
+            print(res.markdown)
             return res.markdown
     
     raise ValueError(f"Did not get markdown for page {page_num}")
