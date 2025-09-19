@@ -1,7 +1,7 @@
 from threading import Lock
 
 from paddleocr import PPStructureV3
-
+import torch
 
 # Run's paddle paddle as in the docs here: https://huggingface.co/PaddlePaddle/PP-OCRv5_server_det
 #  text_detection_model_name="PP-OCRv5_server_det",
@@ -32,5 +32,9 @@ def run_paddlepaddle(
     for cur_page_0_indexed, res in enumerate(output):
         if cur_page_0_indexed == page_num - 1:
             result = res.markdown["markdown_texts"]
+
+    # Fixing annoying crashes
+    torch.cuda.empty_cache()    
+    gc.collect()        
     
     return result
