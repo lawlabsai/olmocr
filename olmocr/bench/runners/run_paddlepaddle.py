@@ -26,9 +26,11 @@ def run_paddlepaddle(
                 device="gpu:0", # Use device to specify GPU for model inference
                 )
     
+
     output = paddle_pipeline.predict(pdf_path)
+    result = ""
     for cur_page_0_indexed, res in enumerate(output):
         if cur_page_0_indexed == page_num - 1:
-            return res.markdown["markdown_texts"]
+            result = res.markdown["markdown_texts"]
     
-    raise ValueError(f"Did not get markdown for page {page_num}")
+    return result
