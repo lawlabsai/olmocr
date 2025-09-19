@@ -33,7 +33,4 @@ def run_paddlepaddle(
         if cur_page_0_indexed == page_num - 1:
             result = res.markdown["markdown_texts"]
 
-    # Fixing annoying crashes
-    torch.cuda.empty_cache()    
-
     return result
