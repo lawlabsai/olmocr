@@ -35,6 +35,5 @@ def run_paddlepaddle(
 
     # Fixing annoying crashes
     torch.cuda.empty_cache()    
-    gc.collect()        
-    
+
     return result
