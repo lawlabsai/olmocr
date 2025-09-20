@@ -1038,6 +1038,7 @@ def main():
         learning_rate=args.learning_rate,
         logging_steps=10,
         save_steps=100,
+        save_total_limit=3,
         eval_steps=50,
         warmup_steps=args.warmup_steps,
         max_prompt_length=3000,
