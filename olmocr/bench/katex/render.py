@@ -19,6 +19,7 @@ import re
 import sqlite3
 import threading
 import unittest
+import weakref
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import List, Optional
@@ -159,61 +160,61 @@ def get_equation_hash(equation, bg_color="white", text_color="black", font_size=
 _thread_local = threading.local()
 
 
+def _cleanup_playwright(playwright, browser):
+    print(f"Cleaning up playwright context on {threading.get_ident()} native id {threading.get_native_id()}, on PID {os.getpid()}, {threading.active_count()} active threads")
+
+    try:
+        browser.close()
+    except Exception:
+        pass  # Ignore errors during cleanup
+
+    try:
+        playwright.stop()
+    except Exception:
+        pass  # Ignore errors during cleanup
+
+
+class _BrowserOwner:
+    def __init__(self):
+        p = sync_playwright().start()
+        b = p.chromium.launch()
+        self.p = p
+        self.browser = b
+        self._closed = False
+        # Important: don't capture `self` or globals in the finalizer
+        self._finalizer = weakref.finalize(self, _cleanup_playwright, p, b)
+
+    def close_now(self):
+        if not self._closed:
+            self._closed = True
+            self._finalizer()  # idempotent; runs at most once
+
+
+def _get_owner():
+    owner = getattr(_thread_local, "owner", None)
+    if owner is None:
+        owner = _BrowserOwner()
+        _thread_local.owner = owner
+    return owner
+
+
 @contextmanager
 def browser_context():
     """
     Context manager for Playwright browser instances.
     Returns a browser context that can be used for rendering equations.
     Automatically handles initialization and cleanup.
-    Cleans up and recreates the browser every 100 uses to prevent memory leaks.
     """
-    # Initialize usage counter if not present
-    if not hasattr(_thread_local, "usage_count"):
-        _thread_local.usage_count = 0
-
-    # Check if we already have a browser for this thread
-    if not hasattr(_thread_local, "playwright"):
-        _thread_local.playwright = sync_playwright().start()
-        _thread_local.browser = _thread_local.playwright.chromium.launch()
-        _thread_local.usage_count = 0
-
-    # Increment usage counter
-    _thread_local.usage_count += 1
-
-    print(f"DEBUG: Initializing playwright context on {threading.get_ident()} native id {threading.get_native_id()}, on PID {os.getpid()}, {threading.active_count()} active threads, {_thread_local.usage_count}")
-
-    # Check if we need to clean up the browser (every 100 uses)
-    if _thread_local.usage_count > 100:
-        # Clean up the old browser completely
-        print("Cleanup up old playwright instance to prevent memory leaks...")
         
-        try:
-            _thread_local.browser.close()
-        except Exception:
-            pass  # Ignore errors during cleanup
-
-        try:
-            _thread_local.playwright.stop()
-        except Exception:
-            pass  # Ignore errors during cleanup
-
-        # Remove the attributes to force re-initialization
-        delattr(_thread_local, "playwright")
-        delattr(_thread_local, "browser")
-
-        # Re-initialize with a fresh browser
-        _thread_local.playwright = sync_playwright().start()
-        _thread_local.browser = _thread_local.playwright.chromium.launch()
-        _thread_local.usage_count = 1  # Reset to 1 since we just used it
-
-    # Create a new context for this operation
-    context = _thread_local.browser.new_context(viewport={"width": 800, "height": 400})
-
+    owner = _get_owner()
+    ctx = owner.browser.new_context(viewport={"width": 800, "height": 400})
     try:
-        yield context
+        yield ctx
     finally:
-        # Clean up the context after use
-        context.close()
+        try:
+            ctx.close()
+        except Exception:
+            pass
 
 
 def render_equation(
