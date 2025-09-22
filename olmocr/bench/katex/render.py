@@ -11,6 +11,7 @@ Requirements:
     Place katex.min.css and katex.min.js in the same directory as this script
 """
 
+import atexit
 import hashlib
 import json
 import os
@@ -20,6 +21,7 @@ import sqlite3
 import threading
 import unittest
 import weakref
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import List, Optional
@@ -156,22 +158,32 @@ def get_equation_hash(equation, bg_color="white", text_color="black", font_size=
     return hashlib.sha1(params_str.encode("utf-8")).hexdigest()
 
 
-# Thread-local storage for browser contexts
+# Thread-local storage for browser instances in the executor threads
 _thread_local = threading.local()
+
+# Global thread pool executor with a fixed number of threads
+# Each thread will maintain its own Playwright instance
+_render_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="playwright-render")
+
+
+def _cleanup_executor():
+    """Cleanup function to shutdown the executor on exit."""
+    _render_executor.shutdown(wait=False)
+
+# Register cleanup at exit
+atexit.register(_cleanup_executor)
 
 
 def _cleanup_playwright(playwright, browser):
-    # print(f"Cleaning up playwright context on {threading.get_ident()} native id {threading.get_native_id()}, on PID {os.getpid()}, {threading.active_count()} active threads")
-
+    print("Cleaning up", playwright)
     try:
         browser.close()
     except Exception:
-        pass  # Ignore errors during cleanup
-
+        pass
     try:
         playwright.stop()
     except Exception:
-        pass  # Ignore errors during cleanup
+        pass
 
 
 class _BrowserOwner:
@@ -190,7 +202,8 @@ class _BrowserOwner:
             self._finalizer()  # idempotent; runs at most once
 
 
-def _get_owner():
+def _get_thread_local_browser():
+    """Get or create a browser instance for the current thread."""
     owner = getattr(_thread_local, "owner", None)
     if owner is None:
         owner = _BrowserOwner()
@@ -198,23 +211,177 @@ def _get_owner():
     return owner
 
 
-@contextmanager
-def browser_context():
+def _render_in_executor(equation, bg_color, text_color, font_size, use_cache, debug_dom, eq_hash):
     """
-    Context manager for Playwright browser instances.
-    Returns a browser context that can be used for rendering equations.
-    Automatically handles initialization and cleanup.
+    Function to be run in the executor thread pool.
+    Each thread maintains its own Playwright instance.
     """
-        
-    owner = _get_owner()
+    owner = _get_thread_local_browser()
     ctx = owner.browser.new_context(viewport={"width": 800, "height": 400})
     try:
-        yield ctx
+        return _do_render(ctx, equation, bg_color, text_color, font_size, debug_dom)
     finally:
         try:
             ctx.close()
         except Exception:
             pass
+
+
+def _do_render(context, equation, bg_color, text_color, font_size, debug_dom):
+    """
+    Internal rendering function that uses a provided browser context.
+    """
+    # Escape the equation for use in a JavaScript string.
+    escaped_equation = json.dumps(equation)
+
+    # Get local paths for KaTeX files.
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    katex_css_path = os.path.join(script_dir, "katex.min.css")
+    katex_js_path = os.path.join(script_dir, "katex.min.js")
+
+    if not os.path.exists(katex_css_path) or not os.path.exists(katex_js_path):
+        raise FileNotFoundError(f"KaTeX files not found. Please ensure katex.min.css and katex.min.js are in {script_dir}")
+
+    # Create a new page.
+    page = context.new_page()
+
+    # Basic HTML structure for rendering.
+    page_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                margin: 0;
+                background-color: {bg_color};
+                color: {text_color};
+            }}
+            #equation-container {{
+                padding: 0;
+                font-size: {font_size}px;
+            }}
+        </style>
+    </head>
+    <body>
+        <div id="equation-container"></div>
+    </body>
+    </html>
+    """
+    page.set_content(page_html)
+    page.add_style_tag(path=katex_css_path)
+    page.add_script_tag(path=katex_js_path)
+    page.wait_for_load_state("networkidle")
+
+    katex_loaded = page.evaluate("typeof katex !== 'undefined'")
+    if not katex_loaded:
+        page.close()
+        raise RuntimeError("KaTeX library failed to load. Check your katex.min.js file.")
+
+    try:
+        error_message = page.evaluate(
+            f"""
+        () => {{
+            try {{
+                katex.render({escaped_equation}, document.getElementById("equation-container"), {{
+                    displayMode: true,
+                    throwOnError: true
+                }});
+                return null;
+            }} catch (error) {{
+                console.error("KaTeX error:", error.message);
+                return error.message;
+            }}
+        }}
+        """
+        )
+    except PlaywrightError as ex:
+        print(escaped_equation)
+        error_message = str(ex)
+        page.close()
+        raise
+
+    if error_message:
+        print(f"Error rendering equation: '{equation}'")
+        print(error_message)
+        # Return error result
+        page.close()
+        return RenderedEquation(mathml=error_message, spans=[], error=error_message)
+
+    page.wait_for_selector(".katex", state="attached")
+
+    if debug_dom:
+        katex_dom_html = page.evaluate(
+            """
+        () => {
+            return document.getElementById("equation-container").innerHTML;
+        }
+        """
+        )
+        print("\n===== KaTeX DOM HTML =====")
+        print(katex_dom_html)
+
+    # Extract inner-most spans with non-whitespace text.
+    spans_info = page.evaluate(
+        """
+    () => {
+        const spans = Array.from(document.querySelectorAll('span'));
+        const list = [];
+        spans.forEach(span => {
+            if (span.children.length === 0 && /\\S/.test(span.textContent)) {
+                const rect = span.getBoundingClientRect();
+                list.push({
+                    text: span.textContent.trim(),
+                    boundingBox: {
+                        x: rect.x,
+                        y: rect.y,
+                        width: rect.width,
+                        height: rect.height
+                    }
+                });
+            }
+        });
+        return list;
+    }
+    """
+    )
+
+    if debug_dom:
+        print("\n===== Extracted Span Information =====")
+        print(spans_info)
+
+    # Extract MathML output (if available) from the KaTeX output.
+    mathml = page.evaluate(
+            """
+        () => {
+            const mathElem = document.querySelector('.katex-mathml math');
+            return mathElem ? mathElem.outerHTML : "";
+        }
+        """
+    )
+
+    page.close()
+
+    rendered_eq = RenderedEquation(
+        mathml=mathml,
+        spans=[
+            SpanInfo(
+                text=s["text"],
+                bounding_box=BoundingBox(
+                    x=s["boundingBox"]["x"],
+                    y=s["boundingBox"]["y"],
+                    width=s["boundingBox"]["width"],
+                    height=s["boundingBox"]["height"],
+                ),
+            )
+            for s in spans_info
+        ],
+    )
+
+    return rendered_eq
 
 
 def render_equation(
@@ -228,6 +395,9 @@ def render_equation(
     """
     Render a LaTeX equation using Playwright and KaTeX, extract the inner-most span elements
     along with their bounding boxes, and extract the MathML output generated by KaTeX.
+
+    This function uses a ThreadPoolExecutor with a fixed number of threads to prevent
+    resource leaks from unbounded thread creation.
     """
     # Calculate hash for caching.
     eq_hash = get_equation_hash(equation, bg_color, text_color, font_size)
@@ -238,165 +408,20 @@ def render_equation(
         if cached is not None:
             return cached
 
-    # Escape the equation for use in a JavaScript string.
-    escaped_equation = json.dumps(equation)
+    # Submit the rendering task to the thread pool executor
+    future = _render_executor.submit(
+        _render_in_executor,
+        equation, bg_color, text_color, font_size, use_cache, debug_dom, eq_hash
+    )
 
-    # Get local paths for KaTeX files.
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    katex_css_path = os.path.join(script_dir, "katex.min.css")
-    katex_js_path = os.path.join(script_dir, "katex.min.js")
+    # Wait for the result
+    rendered_eq = future.result()
 
-    if not os.path.exists(katex_css_path) or not os.path.exists(katex_js_path):
-        raise FileNotFoundError(f"KaTeX files not found. Please ensure katex.min.css and katex.min.js are in {script_dir}")
+    # Save to cache if successful and caching is enabled
+    if use_cache and rendered_eq and not rendered_eq.error:
+        equation_cache.save(eq_hash, rendered_eq)
 
-    # Use the browser context manager
-    with browser_context() as context:
-        # Create a new page.
-        page = context.new_page()
-
-        # Basic HTML structure for rendering.
-        page_html = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <style>
-                body {{
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    height: 100vh;
-                    margin: 0;
-                    background-color: {bg_color};
-                    color: {text_color};
-                }}
-                #equation-container {{
-                    padding: 0;
-                    font-size: {font_size}px;
-                }}
-            </style>
-        </head>
-        <body>
-            <div id="equation-container"></div>
-        </body>
-        </html>
-        """
-        page.set_content(page_html)
-        page.add_style_tag(path=katex_css_path)
-        page.add_script_tag(path=katex_js_path)
-        page.wait_for_load_state("networkidle")
-
-        katex_loaded = page.evaluate("typeof katex !== 'undefined'")
-        if not katex_loaded:
-            page.close()
-            raise RuntimeError("KaTeX library failed to load. Check your katex.min.js file.")
-
-        try:
-            error_message = page.evaluate(
-                f"""
-            () => {{
-                try {{
-                    katex.render({escaped_equation}, document.getElementById("equation-container"), {{
-                        displayMode: true,
-                        throwOnError: true
-                    }});
-                    return null;
-                }} catch (error) {{
-                    console.error("KaTeX error:", error.message);
-                    return error.message;
-                }}
-            }}
-            """
-            )
-        except PlaywrightError as ex:
-            print(escaped_equation)
-            error_message = str(ex)
-            page.close()
-            raise
-
-        if error_message:
-            print(f"Error rendering equation: '{equation}'")
-            print(error_message)
-            # Cache the error result so we don't retry it next time.
-            rendered_eq = RenderedEquation(mathml=error_message, spans=[], error=error_message)
-            if use_cache:
-                equation_cache.save(eq_hash, rendered_eq)
-            page.close()
-            return rendered_eq
-
-        page.wait_for_selector(".katex", state="attached")
-
-        if debug_dom:
-            katex_dom_html = page.evaluate(
-                """
-            () => {
-                return document.getElementById("equation-container").innerHTML;
-            }
-            """
-            )
-            print("\n===== KaTeX DOM HTML =====")
-            print(katex_dom_html)
-
-        # Extract inner-most spans with non-whitespace text.
-        spans_info = page.evaluate(
-            """
-        () => {
-            const spans = Array.from(document.querySelectorAll('span'));
-            const list = [];
-            spans.forEach(span => {
-                if (span.children.length === 0 && /\\S/.test(span.textContent)) {
-                    const rect = span.getBoundingClientRect();
-                    list.push({
-                        text: span.textContent.trim(),
-                        boundingBox: {
-                            x: rect.x,
-                            y: rect.y,
-                            width: rect.width,
-                            height: rect.height
-                        }
-                    });
-                }
-            });
-            return list;
-        }
-        """
-        )
-
-        if debug_dom:
-            print("\n===== Extracted Span Information =====")
-            print(spans_info)
-
-        # Extract MathML output (if available) from the KaTeX output.
-        mathml = page.evaluate(
-            """
-        () => {
-            const mathElem = document.querySelector('.katex-mathml math');
-            return mathElem ? mathElem.outerHTML : "";
-        }
-        """
-        )
-
-        page.close()
-
-        rendered_eq = RenderedEquation(
-            mathml=mathml,
-            spans=[
-                SpanInfo(
-                    text=s["text"],
-                    bounding_box=BoundingBox(
-                        x=s["boundingBox"]["x"],
-                        y=s["boundingBox"]["y"],
-                        width=s["boundingBox"]["width"],
-                        height=s["boundingBox"]["height"],
-                    ),
-                )
-                for s in spans_info
-            ],
-        )
-
-        # Save the successfully rendered equation to the SQLite cache.
-        if use_cache:
-            equation_cache.save(eq_hash, rendered_eq)
-        return rendered_eq
+    return rendered_eq
 
 
 def compare_rendered_equations(reference: RenderedEquation, hypothesis: RenderedEquation) -> bool:
