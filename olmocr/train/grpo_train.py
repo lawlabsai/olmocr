@@ -1047,7 +1047,7 @@ def main():
         report_to=report_to,
         remove_unused_columns=False,
         bf16=True,
-        dataloader_num_workers=0,
+        dataloader_num_workers=8,
         dataloader_drop_last=True,
         
         # GRPO-specific parameters
