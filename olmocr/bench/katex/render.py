@@ -180,6 +180,8 @@ def browser_context():
     # Increment usage counter
     _thread_local.usage_count += 1
 
+    print(f"DEBUG: Initializing playwright context on {threading.get_ident()} native id {threading.get_native_id()}, on PID {os.getpid()}, {threading.active_count()} active threads, {_thread_local.usage_count}")
+
     # Check if we need to clean up the browser (every 100 uses)
     if _thread_local.usage_count > 100:
         # Clean up the old browser completely
