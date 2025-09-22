@@ -161,7 +161,7 @@ _thread_local = threading.local()
 
 
 def _cleanup_playwright(playwright, browser):
-    print(f"Cleaning up playwright context on {threading.get_ident()} native id {threading.get_native_id()}, on PID {os.getpid()}, {threading.active_count()} active threads")
+    # print(f"Cleaning up playwright context on {threading.get_ident()} native id {threading.get_native_id()}, on PID {os.getpid()}, {threading.active_count()} active threads")
 
     try:
         browser.close()
