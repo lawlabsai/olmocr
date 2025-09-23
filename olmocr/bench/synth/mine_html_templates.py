@@ -729,6 +729,7 @@ def generate_tests_from_html(html_content: str, pdf_id: str, page_num: int, rand
                 "type": TestType.TABLE.value,
                 "cell": cell_text,
                 "max_diffs": 0,
+                "ignore_markdown_tables": True,
             }
 
             # Check cell up
@@ -948,6 +949,7 @@ def generate_tests_from_html(html_content: str, pdf_id: str, page_num: int, rand
                 "type": "math",
                 "math": equation,
                 "max_diffs": 0,
+                "ignore_dollar_delimited": True,
             }
         )
 
