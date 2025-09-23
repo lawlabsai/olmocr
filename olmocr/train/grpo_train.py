@@ -694,8 +694,6 @@ def reward_eos(eos_token_id: int, prompts, completions: list[str] | list[list[di
     rewards = []
 
     for i, comp_ids in enumerate(completion_ids):
-        print("Testing, ", i, comp_ids[:-100])
-
         if comp_ids and len(comp_ids) > 0:
             last_token = comp_ids[-1]
             if last_token == eos_token_id:
@@ -1070,9 +1068,11 @@ def main():
         # Get EOS token ID from processor's tokenizer
         eos_token_id = processor.tokenizer.eos_token_id
         logger.info(f"EOS token ID from tokenizer: {eos_token_id}")
-        # Use partial to bind the EOS token ID to the reward function
-        reward_eos_partial = partial(reward_eos, eos_token_id)
-        reward_funcs.append(reward_eos_partial)
+        # Create a wrapper function with proper __name__ attribute
+        def reward_eos_wrapper(prompts, completions, completion_ids, **kwargs):
+            return reward_eos(eos_token_id, prompts, completions, completion_ids, **kwargs)
+        reward_eos_wrapper.__name__ = "reward_eos"
+        reward_funcs.append(reward_eos_wrapper)
         reward_weights.append(args.reward_eos)
         reward_names.append("eos")
         logger.info(f"Added EOS token check reward function with weight {args.reward_eos}")
