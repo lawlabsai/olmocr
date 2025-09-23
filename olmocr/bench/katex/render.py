@@ -274,7 +274,7 @@ def _do_render(context, equation, bg_color, text_color, font_size, debug_dom):
     page.set_content(page_html)
     page.add_style_tag(path=katex_css_path)
     page.add_script_tag(path=katex_js_path)
-    page.wait_for_load_state("networkidle")
+    page.wait_for_load_state("networkidle", timeout=0)
 
     katex_loaded = page.evaluate("typeof katex !== 'undefined'")
     if not katex_loaded:
@@ -311,7 +311,7 @@ def _do_render(context, equation, bg_color, text_color, font_size, debug_dom):
         page.close()
         return RenderedEquation(mathml=error_message, spans=[], error=error_message)
 
-    page.wait_for_selector(".katex", state="attached")
+    page.wait_for_selector(".katex", state="attached", timeout=0)
 
     if debug_dom:
         katex_dom_html = page.evaluate(
