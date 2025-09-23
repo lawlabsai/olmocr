@@ -84,17 +84,17 @@ def check_contamination(bench_data_dir, metadata_jsonl_path, sqlite_db_path):
     
     # Step 2: Read metadata JSONL and process source URLs
     print("Step 2: Processing metadata JSONL...")
-    source_urls = []
+    metadata_entries = []
     with open(metadata_jsonl_path, 'r') as f:
         for line_num, line in enumerate(f, 1):
             try:
                 data = json.loads(line)
                 if 'source_url' in data:
-                    source_urls.append(data['source_url'])
+                    metadata_entries.append(data)
             except json.JSONDecodeError:
                 print(f"Warning: Could not parse line {line_num}")
-    
-    print(f"Found {len(source_urls)} source URLs in metadata\n")
+
+    print(f"Found {len(metadata_entries)} entries with source URLs in metadata\n")
     
     # Step 3: Map URLs to hashes and query database
     print("Step 3: Mapping URLs and querying database...")
@@ -106,15 +106,18 @@ def check_contamination(bench_data_dir, metadata_jsonl_path, sqlite_db_path):
     s3_count = 0
     local_count = 0
     empty_result_count = 0
-    
-    for source_url in source_urls:
+    blank_url_entries = []  # Store entries with blank URLs
+
+    for metadata_entry in metadata_entries:
+        source_url = metadata_entry.get('source_url')
+        pdf_id = metadata_entry.get('pdf_id', 'N/A')
         pdf_hash = None
-        
+
         # Handle S3 URLs
         if source_url.startswith("s3://"):
             s3_count += 1
             pdf_hash = s3_url_to_hash(source_url)
-        
+
         # Handle local paths starting with ./
         elif source_url.startswith("./"):
             local_count += 1
@@ -125,7 +128,7 @@ def check_contamination(bench_data_dir, metadata_jsonl_path, sqlite_db_path):
                 result = cursor.fetchone()
                 if result:
                     pdf_hash = result[0]
-        
+
         # If we have a hash, look up the real URI
         if pdf_hash:
             cursor.execute("SELECT uri FROM pdf_mapping WHERE pdf_hash = ?", (pdf_hash,))
@@ -134,6 +137,12 @@ def check_contamination(bench_data_dir, metadata_jsonl_path, sqlite_db_path):
                 # Check if the looked up URL is empty/blank
                 if result[0] == "" or result[0] is None:
                     empty_result_count += 1
+                    blank_url_entries.append({
+                        'pdf_id': pdf_id,
+                        'source_url': source_url,
+                        'pdf_hash': pdf_hash,
+                        'db_result': result[0]
+                    })
                 else:
                     real_urls.add(result[0])
         else:
@@ -149,6 +158,17 @@ def check_contamination(bench_data_dir, metadata_jsonl_path, sqlite_db_path):
     print(f"  - Empty/blank URLs from database: {empty_result_count}")
     if unmapped_count > 0:
         print(f"Warning: {unmapped_count} URLs could not be mapped\n")
+
+    # Print entries with blank URLs
+    if blank_url_entries:
+        print(f"\n⚠️  Entries with blank URLs ({len(blank_url_entries)} total):")
+        for entry in blank_url_entries[:20]:  # Show first 20
+            print(f"  PDF ID: {entry['pdf_id']}")
+            print(f"    Source URL: {entry['source_url']}")
+            print(f"    PDF Hash: {entry['pdf_hash']}")
+            print(f"    DB Result: {repr(entry['db_result'])}")
+        if len(blank_url_entries) > 20:
+            print(f"  ... and {len(blank_url_entries) - 20} more entries with blank URLs\n")
     
     # Step 4: Check for contamination
     print("Step 4: Checking for contamination...")
