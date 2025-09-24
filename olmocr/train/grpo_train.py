@@ -799,7 +799,7 @@ def main():
     parser.add_argument(
         "--learning_rate",
         type=float,
-        default=1e-5,
+        default=2e-6,
         help="Learning rate"
     )
     parser.add_argument(
@@ -829,8 +829,14 @@ def main():
     parser.add_argument(
         "--warmup_steps",
         type=int,
-        default=10,
+        default=100,
         help="Number of warmup steps for learning rate scheduler"
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Seed passed to TRL trainer to shuffle data, etc"
     )
     parser.add_argument(
         "--max_train_samples",
@@ -947,8 +953,8 @@ def main():
     parser.add_argument(
         "--num_generations",
         type=int,
-        default=8,
-        help="Number of generations per prompt (default: 8)"
+        default=28,
+        help="Number of generations per prompt (default: 28)"
     )
     
     args = parser.parse_args()
@@ -1108,6 +1114,8 @@ def main():
         report_to=report_to,
         remove_unused_columns=False,
         bf16=True,
+        shuffle_dataset=True,
+        seed=args.seed,
         dataloader_num_workers=8,
         dataloader_drop_last=True,
         
