@@ -105,7 +105,7 @@ class PageResult:
 
 
 async def build_page_query(local_pdf_path: str, page: int, target_longest_image_dim: int, image_rotation: int = 0) -> dict:
-    MAX_TOKENS = 4500
+    MAX_TOKENS = 8000
     assert image_rotation in [0, 90, 180, 270], "Invalid image rotation provided in build_page_query"
 
     # Allow the page rendering to process in the background, but limit the number of workers otherwise you can overload the system
@@ -678,7 +678,7 @@ async def vllm_server_task(model_name_or_path, args, semaphore, unknown_args=Non
                 # Check if we should release the semaphore
                 should_release = (
                     server_printed_ready_message
-                    and last_queue_req <= int(peak_running_req * 0.1)
+                    and last_queue_req <= int(peak_running_req * 0.2)
                     and time.time() - last_semaphore_release > 30
                     and semaphore.locked()
                     and (last_running_req == 0 or running_reqs_decreased)
