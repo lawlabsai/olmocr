@@ -170,6 +170,7 @@ def _cleanup_executor():
     """Cleanup function to shutdown the executor on exit."""
     _render_executor.shutdown(wait=False)
 
+
 # Register cleanup at exit
 atexit.register(_cleanup_executor)
 
@@ -355,7 +356,7 @@ def _do_render(context, equation, bg_color, text_color, font_size, debug_dom):
 
     # Extract MathML output (if available) from the KaTeX output.
     mathml = page.evaluate(
-            """
+        """
         () => {
             const mathElem = document.querySelector('.katex-mathml math');
             return mathElem ? mathElem.outerHTML : "";
@@ -409,10 +410,7 @@ def render_equation(
             return cached
 
     # Submit the rendering task to the thread pool executor
-    future = _render_executor.submit(
-        _render_in_executor,
-        equation, bg_color, text_color, font_size, use_cache, debug_dom, eq_hash
-    )
+    future = _render_executor.submit(_render_in_executor, equation, bg_color, text_color, font_size, use_cache, debug_dom, eq_hash)
 
     # Wait for the result
     rendered_eq = future.result()

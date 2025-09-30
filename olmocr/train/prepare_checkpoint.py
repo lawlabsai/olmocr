@@ -260,7 +260,7 @@ def prepare_checkpoints(sources: list[str], dest_path: str) -> None:
 
     sources = [source.rstrip("/") for source in sources]
     dest_path = dest_path.rstrip("/")
-    
+
     # Detect architectures
     architectures = []
     for source in sources:

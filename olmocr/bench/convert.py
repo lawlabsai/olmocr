@@ -97,7 +97,7 @@ async def process_pdfs(config, pdf_directory, data_directory, repeats, remove_te
     # When max_parallel is > 0, create a thread pool executor
     use_executor = max_parallel != 0
     executor = ThreadPoolExecutor(max_workers=max_parallel) if use_executor else None
-    
+
     try:
         for candidate in config.keys():
             print(f"Starting conversion using {candidate} with kwargs: {config[candidate]['kwargs']}")

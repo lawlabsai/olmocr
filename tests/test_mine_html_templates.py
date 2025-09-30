@@ -1,15 +1,17 @@
-import unittest
 import re
-from unittest.mock import patch, MagicMock
+import unittest
+from unittest.mock import MagicMock, patch
+
 from bs4 import BeautifulSoup
 
 from olmocr.bench.synth.mine_html_templates import (
+    PreserveTablesConverter,
+    extract_html_metadata,
     generate_tests_from_html,
     html_to_markdown_with_frontmatter,
-    extract_html_metadata,
-    PreserveTablesConverter
 )
 from olmocr.bench.tests import TestType
+
 
 class TestMineTests(unittest.TestCase):
     def test_absent_nested(self):
@@ -1035,7 +1037,7 @@ class TestMineTests(unittest.TestCase):
 
 class TestMathExtraction(unittest.TestCase):
     """Test the math extraction functionality in mine_html_templates.py"""
-    
+
     def test_math_extraction_from_html(self):
         """Test that math equations are properly extracted from HTML content"""
         html_content = """
@@ -1048,16 +1050,16 @@ class TestMathExtraction(unittest.TestCase):
         </body>
         </html>
         """
-        
+
         # Generate tests from HTML
         tests = generate_tests_from_html(html_content, "test_pdf", 1)
-        
+
         # Filter math tests
         math_tests = [t for t in tests if t.get("type") == "math"]
-        
+
         # Check that we extracted math equations
         self.assertTrue(len(math_tests) > 0, "Should extract at least one math equation")
-        
+
         # Check that specific equations were extracted
         math_contents = [t["math"] for t in math_tests]
         self.assertIn("x = 2", math_contents)
@@ -1079,20 +1081,20 @@ class TestMathExtraction(unittest.TestCase):
         </body>
         </html>
         """
-        
+
         tests = generate_tests_from_html(html_content, "test_pdf", 1)
         math_tests = [t for t in tests if t.get("type") == "math"]
-        
+
         # Check multiline equation is captured
         self.assertTrue(len(math_tests) > 0)
-        
+
         # Check that the multiline content is preserved (without excessive newlines)
         found_multiline = False
         for test in math_tests:
             if "\\frac{e_i + \\varphi(e_i)}{2}" in test["math"] and "\\mathbb{N}" in test["math"]:
                 found_multiline = True
                 break
-        
+
         self.assertTrue(found_multiline, "Should extract multiline equation correctly")
 
     def test_math_extraction_deduplication(self):
@@ -1106,13 +1108,13 @@ class TestMathExtraction(unittest.TestCase):
         </body>
         </html>
         """
-        
+
         tests = generate_tests_from_html(html_content, "test_pdf", 1)
         math_tests = [t for t in tests if t.get("type") == "math"]
-        
+
         # Count how many times the equation appears
         equation_count = sum(1 for t in math_tests if "x^2 + y^2 = z^2" in t["math"])
-        
+
         # Should only appear once due to deduplication
         self.assertEqual(equation_count, 1, "Duplicate equations should be deduplicated")
 
@@ -1127,12 +1129,12 @@ class TestMathExtraction(unittest.TestCase):
         </body>
         </html>
         """
-        
+
         tests = generate_tests_from_html(html_content, "test_pdf", 1)
         math_tests = [t for t in tests if t.get("type") == "math"]
-        
+
         math_contents = [t["math"] for t in math_tests]
-        
+
         # Check all patterns are captured
         self.assertIn("inline1", math_contents)
         self.assertIn("display1", math_contents)
@@ -1149,12 +1151,12 @@ class TestMathExtraction(unittest.TestCase):
         </body>
         </html>
         """
-        
+
         tests = generate_tests_from_html(html_content, "test_pdf", 1)
         math_tests = [t for t in tests if t.get("type") == "math"]
-        
+
         math_contents = [t["math"] for t in math_tests]
-        
+
         # Short equations (length <= 2) should be filtered out
         self.assertNotIn("x", math_contents)
         self.assertNotIn("y", math_contents)
@@ -1170,16 +1172,16 @@ class TestMathExtraction(unittest.TestCase):
         </body>
         </html>
         """
-        
+
         # Mock the validation to always pass for math tests
-        with patch('olmocr.bench.synth.mine_html_templates.load_single_test') as mock_load:
+        with patch("olmocr.bench.synth.mine_html_templates.load_single_test") as mock_load:
             mock_test = MagicMock()
             mock_test.run.return_value = (True, None)
             mock_load.return_value = mock_test
-            
+
             tests = generate_tests_from_html(html_content, "test_pdf", 1)
             math_tests = [t for t in tests if t.get("type") == "math"]
-            
+
             # Verify math test was created
             self.assertTrue(len(math_tests) > 0)
             # Verify test has correct structure
@@ -1212,10 +1214,10 @@ class TestMathExtraction(unittest.TestCase):
         </body>
         </html>
         """
-        
+
         tests = generate_tests_from_html(html_content, "test_pdf", 1)
         math_tests = [t for t in tests if t.get("type") == "math"]
-        
+
         self.assertTrue(len(math_tests) > 0)
         # The equation should be stripped of leading/trailing whitespace
         self.assertEqual(math_tests[0]["math"].strip(), math_tests[0]["math"])
@@ -1238,21 +1240,21 @@ class TestExtractHtmlMetadata(unittest.TestCase):
         </body>
         </html>
         """
-        
+
         metadata = extract_html_metadata(html_content)
-        
+
         # Check language extraction
-        self.assertEqual(metadata['primary_language'], 'pt')
-        
+        self.assertEqual(metadata["primary_language"], "pt")
+
         # Check rotation values (always fixed)
-        self.assertTrue(metadata['is_rotation_valid'])
-        self.assertEqual(metadata['rotation_correction'], 0)
-        
+        self.assertTrue(metadata["is_rotation_valid"])
+        self.assertEqual(metadata["rotation_correction"], 0)
+
         # Check table/diagram detection
         # With 1 image (500 chars) and small text content, image ratio > 50%
-        self.assertFalse(metadata['is_table'])
-        self.assertTrue(metadata['is_diagram'])  # Image estimate dominates
-    
+        self.assertFalse(metadata["is_table"])
+        self.assertTrue(metadata["is_diagram"])  # Image estimate dominates
+
     def test_extract_metadata_table_heavy_document(self):
         """Test metadata extraction from a document that is mostly tables."""
         html_content = """
@@ -1271,13 +1273,13 @@ class TestExtractHtmlMetadata(unittest.TestCase):
         </body>
         </html>
         """
-        
+
         metadata = extract_html_metadata(html_content)
-        
-        self.assertEqual(metadata['primary_language'], 'en')
-        self.assertTrue(metadata['is_table'])  # Should be True as >50% is table
-        self.assertFalse(metadata['is_diagram'])
-    
+
+        self.assertEqual(metadata["primary_language"], "en")
+        self.assertTrue(metadata["is_table"])  # Should be True as >50% is table
+        self.assertFalse(metadata["is_diagram"])
+
     def test_extract_metadata_image_heavy_document(self):
         """Test metadata extraction from a document that is mostly images."""
         html_content = """
@@ -1292,13 +1294,13 @@ class TestExtractHtmlMetadata(unittest.TestCase):
         </body>
         </html>
         """
-        
+
         metadata = extract_html_metadata(html_content)
-        
-        self.assertEqual(metadata['primary_language'], 'es')
-        self.assertFalse(metadata['is_table'])
-        self.assertTrue(metadata['is_diagram'])  # Should be True as >50% is images
-    
+
+        self.assertEqual(metadata["primary_language"], "es")
+        self.assertFalse(metadata["is_table"])
+        self.assertTrue(metadata["is_diagram"])  # Should be True as >50% is images
+
     def test_extract_metadata_language_with_region(self):
         """Test that language codes with regions (e.g., pt-BR) are shortened."""
         html_content = """
@@ -1308,12 +1310,12 @@ class TestExtractHtmlMetadata(unittest.TestCase):
         </body>
         </html>
         """
-        
+
         metadata = extract_html_metadata(html_content)
-        
+
         # Should convert pt-BR to pt
-        self.assertEqual(metadata['primary_language'], 'pt')
-    
+        self.assertEqual(metadata["primary_language"], "pt")
+
     def test_extract_metadata_no_html_tag(self):
         """Test extraction when there's no html tag (defaults to 'en')."""
         html_content = """
@@ -1321,11 +1323,11 @@ class TestExtractHtmlMetadata(unittest.TestCase):
             <p>Content without html tag</p>
         </body>
         """
-        
+
         metadata = extract_html_metadata(html_content)
-        
-        self.assertEqual(metadata['primary_language'], 'en')  # Should default to 'en'
-    
+
+        self.assertEqual(metadata["primary_language"], "en")  # Should default to 'en'
+
     def test_extract_metadata_mixed_content(self):
         """Test a document with mixed content types."""
         html_content = """<!DOCTYPE html>
@@ -1586,13 +1588,13 @@ class TestExtractHtmlMetadata(unittest.TestCase):
                 </body>
                 </html>
         """
-        
+
         metadata = extract_html_metadata(html_content)
-        
-        self.assertEqual(metadata['primary_language'], 'pt')
-        self.assertTrue(metadata['is_table'])
-        self.assertFalse(metadata['is_diagram']) 
-    
+
+        self.assertEqual(metadata["primary_language"], "pt")
+        self.assertTrue(metadata["is_table"])
+        self.assertFalse(metadata["is_diagram"])
+
     def test_extract_metadata_empty_body(self):
         """Test extraction with empty or minimal content."""
         html_content = """
@@ -1600,14 +1602,14 @@ class TestExtractHtmlMetadata(unittest.TestCase):
         <body></body>
         </html>
         """
-        
+
         metadata = extract_html_metadata(html_content)
-        
-        self.assertEqual(metadata['primary_language'], 'de')
-        self.assertFalse(metadata['is_table'])
-        self.assertFalse(metadata['is_diagram'])
-        self.assertTrue(metadata['is_rotation_valid'])
-        self.assertEqual(metadata['rotation_correction'], 0)
+
+        self.assertEqual(metadata["primary_language"], "de")
+        self.assertFalse(metadata["is_table"])
+        self.assertFalse(metadata["is_diagram"])
+        self.assertTrue(metadata["is_rotation_valid"])
+        self.assertEqual(metadata["rotation_correction"], 0)
 
 
 class TestHtmlToMarkdown(unittest.TestCase):
@@ -1625,19 +1627,19 @@ class TestHtmlToMarkdown(unittest.TestCase):
         </body>
         </html>
         """
-        
+
         markdown_with_frontmatter = html_to_markdown_with_frontmatter(html_content)
-        
+
         # Check that the title from head tag is NOT in the markdown
         self.assertNotIn("This Should Not Appear In Markdown", markdown_with_frontmatter)
-        
+
         # Check that body content IS in the markdown
         self.assertIn("Main Heading", markdown_with_frontmatter)
         self.assertIn("This is the body content that should appear", markdown_with_frontmatter)
-        
+
         # Check that frontmatter is present
         self.assertTrue(markdown_with_frontmatter.startswith("---"))
-    
+
     def test_image_with_data_description(self):
         """Test that images are converted with placeholder alt text."""
         html_content = """
@@ -1649,16 +1651,16 @@ class TestHtmlToMarkdown(unittest.TestCase):
         </body>
         </html>
         """
-        
+
         markdown_with_frontmatter = html_to_markdown_with_frontmatter(html_content)
-        
+
         # Check that images use the fixed placeholder alt text
         self.assertIn("![Image Placeholder]", markdown_with_frontmatter)
-        
+
         # Check that other content is preserved
         self.assertIn("Text before image", markdown_with_frontmatter)
         self.assertIn("Text after image", markdown_with_frontmatter)
-    
+
     def test_image_without_data_description(self):
         """Test that images without data-description use default alt text."""
         html_content = """
@@ -1668,12 +1670,12 @@ class TestHtmlToMarkdown(unittest.TestCase):
         </body>
         </html>
         """
-        
+
         markdown_with_frontmatter = html_to_markdown_with_frontmatter(html_content)
-        
+
         # Check that default alt text is used
         self.assertIn("![Image Placeholder]", markdown_with_frontmatter)
-    
+
     def test_headers_footers_excluded(self):
         """Test that header and footer tags are excluded from markdown."""
         html_content = """
@@ -1692,17 +1694,17 @@ class TestHtmlToMarkdown(unittest.TestCase):
         </body>
         </html>
         """
-        
+
         markdown_with_frontmatter = html_to_markdown_with_frontmatter(html_content)
-        
+
         # Check that header/footer content is excluded
         self.assertNotIn("Navigation menu", markdown_with_frontmatter)
         self.assertNotIn("Footer text", markdown_with_frontmatter)
-        
+
         # Check that main content is included
         self.assertIn("Main Content", markdown_with_frontmatter)
         self.assertIn("This should appear in the markdown", markdown_with_frontmatter)
-    
+
     def test_no_body_tag_fallback(self):
         """Test that content is still processed when there's no body tag."""
         html_content = """
@@ -1711,13 +1713,13 @@ class TestHtmlToMarkdown(unittest.TestCase):
             <p>This should still be converted.</p>
         </div>
         """
-        
+
         markdown_with_frontmatter = html_to_markdown_with_frontmatter(html_content)
-        
+
         # Check that content is still converted
         self.assertIn("Content without body tag", markdown_with_frontmatter)
         self.assertIn("This should still be converted", markdown_with_frontmatter)
-    
+
     def test_removes_triple_dashes_from_content(self):
         """Test that --- at the start or end of markdown content is removed."""
         # Test with --- at the beginning
@@ -1729,17 +1731,17 @@ class TestHtmlToMarkdown(unittest.TestCase):
         </body>
         </html>
         """
-        
+
         markdown_start = html_to_markdown_with_frontmatter(html_content_start)
-        lines = markdown_start.split('\n')
-        
+        lines = markdown_start.split("\n")
+
         # Check that we have FrontMatter
-        self.assertEqual(lines[0], '---')
+        self.assertEqual(lines[0], "---")
         # Check that the content doesn't start with --- after the FrontMatter ends
-        frontmatter_end = next(i for i in range(1, len(lines)) if lines[i] == '---')
-        content_after_frontmatter = '\n'.join(lines[frontmatter_end + 1:])
-        self.assertFalse(content_after_frontmatter.strip().startswith('---'))
-        
+        frontmatter_end = next(i for i in range(1, len(lines)) if lines[i] == "---")
+        content_after_frontmatter = "\n".join(lines[frontmatter_end + 1 :])
+        self.assertFalse(content_after_frontmatter.strip().startswith("---"))
+
         # Test with --- at the end
         html_content_end = """
         <html lang="en">
@@ -1749,11 +1751,11 @@ class TestHtmlToMarkdown(unittest.TestCase):
         </body>
         </html>
         """
-        
+
         markdown_end = html_to_markdown_with_frontmatter(html_content_end)
         # Check that content doesn't end with ---
-        self.assertFalse(markdown_end.rstrip().endswith('---\n---'))
-        
+        self.assertFalse(markdown_end.rstrip().endswith("---\n---"))
+
         # Test with --- at both beginning and end
         html_content_both = """
         <html lang="en">
@@ -1764,22 +1766,22 @@ class TestHtmlToMarkdown(unittest.TestCase):
         </body>
         </html>
         """
-        
+
         markdown_both = html_to_markdown_with_frontmatter(html_content_both)
-        lines_both = markdown_both.split('\n')
-        frontmatter_end_both = next(i for i in range(1, len(lines_both)) if lines_both[i] == '---')
-        content_both = '\n'.join(lines_both[frontmatter_end_both + 1:])
-        
+        lines_both = markdown_both.split("\n")
+        frontmatter_end_both = next(i for i in range(1, len(lines_both)) if lines_both[i] == "---")
+        content_both = "\n".join(lines_both[frontmatter_end_both + 1 :])
+
         # Content should not start or end with ---
-        self.assertFalse(content_both.strip().startswith('---'))
-        self.assertFalse(content_both.strip().endswith('---'))
+        self.assertFalse(content_both.strip().startswith("---"))
+        self.assertFalse(content_both.strip().endswith("---"))
         # But should contain "Middle content"
         self.assertIn("Middle content", content_both)
 
 
 class TestSuperscriptSubscriptConversion(unittest.TestCase):
     """Test superscript and subscript conversion to Unicode in html_to_markdown_with_frontmatter"""
-    
+
     def test_basic_superscripts(self):
         """Test basic superscript conversion"""
         html = """
@@ -1791,17 +1793,17 @@ class TestSuperscriptSubscriptConversion(unittest.TestCase):
         </html>
         """
         result = html_to_markdown_with_frontmatter(html)
-        
+
         # Check that superscripts are converted to Unicode
         self.assertIn("x²", result)
         self.assertIn("y³", result)
         self.assertIn("z⁴", result)
         self.assertIn("10⁹", result)
-        
+
         # Should not contain HTML sup tags in markdown
         self.assertNotIn("<sup>", result)
         self.assertNotIn("</sup>", result)
-    
+
     def test_basic_subscripts(self):
         """Test basic subscript conversion"""
         html = """
@@ -1814,16 +1816,16 @@ class TestSuperscriptSubscriptConversion(unittest.TestCase):
         </html>
         """
         result = html_to_markdown_with_frontmatter(html)
-        
+
         # Check that subscripts are converted to Unicode
         self.assertIn("H₂O", result)
         self.assertIn("CO₂", result)
         self.assertIn("Xₙ", result)
-        
+
         # Should not contain HTML sub tags in markdown
         self.assertNotIn("<sub>", result)
         self.assertNotIn("</sub>", result)
-    
+
     def test_mixed_super_and_subscripts(self):
         """Test mixed superscripts and subscripts"""
         html = """
@@ -1835,13 +1837,13 @@ class TestSuperscriptSubscriptConversion(unittest.TestCase):
         </html>
         """
         result = html_to_markdown_with_frontmatter(html)
-        
+
         # Check mixed conversions
         self.assertIn("x²", result)
         self.assertIn("H₂O⁺", result)
         self.assertIn("Ca²⁺", result)
         self.assertIn("SO₄²⁻", result)
-    
+
     def test_special_characters(self):
         """Test special character conversions"""
         html = """
@@ -1854,7 +1856,7 @@ class TestSuperscriptSubscriptConversion(unittest.TestCase):
         </html>
         """
         result = html_to_markdown_with_frontmatter(html)
-        
+
         # Check special character conversions
         self.assertIn("(x+y)ⁿ", result)
         self.assertIn("f₍ₓ₎", result)
@@ -1863,7 +1865,7 @@ class TestSuperscriptSubscriptConversion(unittest.TestCase):
         # subscript i might not be in map, so check either form
         self.assertTrue("aᵢ" in result or "a<sub>i</sub>" in result or "ai" in result)
         self.assertIn("bⁱ", result)
-    
+
     def test_in_table(self):
         """Test superscripts/subscripts within HTML tables"""
         html = """
@@ -1887,14 +1889,14 @@ class TestSuperscriptSubscriptConversion(unittest.TestCase):
         </html>
         """
         result = html_to_markdown_with_frontmatter(html)
-        
+
         # Tables should be preserved as HTML but superscripts/subscripts should still be converted
         self.assertIn("<table>", result)
-        
+
         # Check if conversions happened in table cells
         self.assertTrue("H₂O" in result or "<sub>2</sub>" in result)
         self.assertTrue("SO₄²⁻" in result or "<sub>4</sub><sup>2-</sup>" in result)
-    
+
     def test_nested_elements(self):
         """Test superscripts/subscripts in nested HTML elements"""
         html = """
@@ -1911,12 +1913,12 @@ class TestSuperscriptSubscriptConversion(unittest.TestCase):
         </html>
         """
         result = html_to_markdown_with_frontmatter(html)
-        
+
         # Check conversions in nested structures
         self.assertIn("mc²", result)
         self.assertTrue("x¹" in result or "x1" in result)
         self.assertTrue("x₂" in result or "x2" in result)
-    
+
     def test_frontmatter_preserved(self):
         """Test that frontmatter is still generated correctly"""
         html = """
@@ -1928,15 +1930,15 @@ class TestSuperscriptSubscriptConversion(unittest.TestCase):
         </html>
         """
         result = html_to_markdown_with_frontmatter(html)
-        
+
         # Check frontmatter exists
         self.assertTrue(result.startswith("---"))
         self.assertIn("primary_language: es", result)
         self.assertIn("is_table:", result)
-        
+
         # Also check the conversion happened
         self.assertIn("x²", result)
-    
+
     def test_unmapped_characters(self):
         """Test characters not in the mapping"""
         html = """
@@ -1948,12 +1950,12 @@ class TestSuperscriptSubscriptConversion(unittest.TestCase):
         </html>
         """
         result = html_to_markdown_with_frontmatter(html)
-        
+
         # Unmapped characters should be left as-is or handled gracefully
         self.assertIn("H₂SO₄", result)
         # Asterisk is not in the map, so it might remain as-is
         self.assertTrue("note*" in result or "note<sup>*</sup>" in result or "note^*" in result)
-    
+
     def test_empty_super_subscripts(self):
         """Test empty sup/sub tags"""
         html = """
@@ -1965,13 +1967,13 @@ class TestSuperscriptSubscriptConversion(unittest.TestCase):
         </html>
         """
         result = html_to_markdown_with_frontmatter(html)
-        
+
         # Empty tags should not cause errors
         self.assertIn("z²", result)
         # Empty tags should just be removed
         self.assertIn("x", result)
         self.assertIn("y", result)
-    
+
     def test_complex_math_expression(self):
         """Test a complex mathematical expression"""
         html = """
@@ -1983,10 +1985,10 @@ class TestSuperscriptSubscriptConversion(unittest.TestCase):
         </html>
         """
         result = html_to_markdown_with_frontmatter(html)
-        
+
         # Check complex nested expressions
         self.assertIn("x₁", result)
-        self.assertIn("x₂", result) 
+        self.assertIn("x₂", result)
         self.assertIn("r²", result)
         self.assertIn("a₀", result)
         self.assertIn("a₁", result)
@@ -1995,5 +1997,5 @@ class TestSuperscriptSubscriptConversion(unittest.TestCase):
         self.assertIn("xⁿ", result)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

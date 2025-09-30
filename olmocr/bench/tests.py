@@ -870,7 +870,7 @@ class BaselineTest(BasePDFTest):
 
     """
 
-    max_length: Optional[int] = None # Used to implement blank page checks
+    max_length: Optional[int] = None  # Used to implement blank page checks
     max_length_skips_image_alt_tags: bool = False
 
     max_repeats: int = 30
@@ -883,7 +883,7 @@ class BaselineTest(BasePDFTest):
         if self.max_length is not None:
             if self.max_length_skips_image_alt_tags:
                 # Remove markdown image tags like ![alt text](image.png) from the text length count
-                content_for_length_check = re.sub(r'!\[.*?\]\(.*?\)', '', content)
+                content_for_length_check = re.sub(r"!\[.*?\]\(.*?\)", "", content)
                 base_content_len = len("".join(c for c in content_for_length_check if c.isalnum()).strip())
 
             if base_content_len > self.max_length:
@@ -951,10 +951,12 @@ class MathTest(BasePDFTest):
         ]
 
         if not self.ignore_dollar_delimited:
-            patterns.extend([            
-                (r"\$\$(.+?)\$\$", r"\$\$(.+?)\$\$"),  # $$...$$
-                (r"\$(.+?)\$", r"\$(.+?)\$"),  # $...$])
-            ])
+            patterns.extend(
+                [
+                    (r"\$\$(.+?)\$\$", r"\$\$(.+?)\$\$"),  # $$...$$
+                    (r"\$(.+?)\$", r"\$(.+?)\$"),  # $...$])
+                ]
+            )
 
         equations = []
         modified_content = content
@@ -994,13 +996,13 @@ class MathTest(BasePDFTest):
 def load_single_test(data: Union[str, Dict]) -> BasePDFTest:
     """
     Load a single test from a JSON line string or JSON object.
-    
+
     Args:
         data: Either a JSON string to parse or a dictionary containing test data.
-        
+
     Returns:
         A test object of the appropriate type.
-        
+
     Raises:
         ValidationError: If the test type is unknown or data is invalid.
         json.JSONDecodeError: If the string cannot be parsed as JSON.
@@ -1011,7 +1013,7 @@ def load_single_test(data: Union[str, Dict]) -> BasePDFTest:
         if not data:
             raise ValueError("Empty string provided")
         data = json.loads(data)
-    
+
     # Process the test data
     test_type = data.get("type")
     if test_type in {TestType.PRESENT.value, TestType.ABSENT.value}:
@@ -1026,7 +1028,7 @@ def load_single_test(data: Union[str, Dict]) -> BasePDFTest:
         test = BaselineTest(**data)
     else:
         raise ValidationError(f"Unknown test type: {test_type}")
-    
+
     return test
 
 

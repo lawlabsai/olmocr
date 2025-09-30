@@ -32,6 +32,7 @@ TARGET_IMAGE_DIM = 2048
 
 class TableDetectionResponse(BaseModel):
     """Structured output for table detection."""
+
     contains_table: bool
 
 
@@ -84,24 +85,21 @@ def check_for_table(pdf_path: str, page_num: int, api_key: str) -> Optional[bool
     try:
         # Render the PDF page as an image (render_pdf_to_base64png is 1-indexed)
         image_base64 = render_pdf_to_base64png(pdf_path, page_num=page_num + 1, target_longest_image_dim=TARGET_IMAGE_DIM)
-        
+
         # Simple prompt asking about tables
         prompt = "Does this page contain a table on it?"
-       
+
         response = client.beta.chat.completions.parse(
             model="gpt-4o-2024-08-06",
             messages=[
                 {
                     "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_base64}"}}
-                    ],
+                    "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_base64}"}}],
                 }
             ],
             temperature=0.1,
             max_tokens=100,
-            response_format=TableDetectionResponse
+            response_format=TableDetectionResponse,
         )
 
         if not response.choices or len(response.choices) == 0:
@@ -110,16 +108,16 @@ def check_for_table(pdf_path: str, page_num: int, api_key: str) -> Optional[bool
 
         # Parse the structured response
         parsed_response = response.choices[0].message.parsed
-        
+
         if parsed_response is None:
             print(f"Failed to parse response for {pdf_path} page {page_num}")
             return None
-            
+
         has_table = parsed_response.contains_table
-        
+
         if has_table:
             print(f"Found table in {pdf_path} page {page_num + 1}")
-        
+
         return has_table
 
     except Exception as e:
@@ -169,26 +167,26 @@ def process_pdf(s3_path: str, temp_dir: str, output_dir: str, api_key: str) -> b
 
         # Check if the page contains a table
         has_table = check_for_table(local_pdf_path, page_num, api_key)
-        
+
         if has_table:
             # Extract just the page with the table and save it as a new PDF
             os.makedirs(output_dir, exist_ok=True)
-            
+
             # Create output filename with basename_pgnum.pdf format
             pdf_basename = os.path.splitext(pdf_filename)[0]
             output_pdf_path = os.path.join(output_dir, f"{pdf_basename}_pg{page_num+1}.pdf")
-            
+
             # Extract the single page
             writer = pypdf.PdfWriter()
             writer.add_page(reader.pages[page_num])
-            
+
             # Write the output PDF
             with open(output_pdf_path, "wb") as output_file:
                 writer.write(output_file)
-            
+
             print(f"Extracted page {page_num+1} with table from {pdf_filename} to {os.path.basename(output_pdf_path)}")
             return True
-        
+
         return False
 
     except Exception as e:
@@ -223,16 +221,16 @@ def main():
     reservoir_size = args.max_pdfs * args.reservoir_multiplier
     pdf_paths = []
     n = 0  # Total number of items seen
-    
+
     print(f"Using reservoir sampling with size {reservoir_size}")
-    
+
     with open(args.input_list, "r") as f:
         for line in f:
             n += 1
             path = line.strip()
             if not path:
                 continue
-                
+
             if len(pdf_paths) < reservoir_size:
                 pdf_paths.append(path)
             else:
@@ -240,28 +238,28 @@ def main():
                 s = random.randint(1, n)
                 if s <= reservoir_size:
                     pdf_paths[s - 1] = path
-    
+
     # Shuffle the reservoir
     random.shuffle(pdf_paths)
-    
+
     print(f"Sampled {len(pdf_paths)} PDF paths from {n} total paths")
-    
+
     table_pdfs_found = 0
-    
+
     if args.parallel > 1:
         # Parallel processing
         print(f"Processing PDFs with {args.parallel} parallel workers")
-        
+
         with ThreadPoolExecutor(max_workers=args.parallel) as executor:
             futures = []
-            
+
             # Submit all tasks
             for s3_path in pdf_paths:
                 if table_pdfs_found >= args.max_pdfs:
                     break
                 future = executor.submit(process_pdf, s3_path, args.temp_dir, args.output_dir, api_key)
                 futures.append(future)
-            
+
             # Process results as they complete
             with tqdm(total=min(len(pdf_paths), args.max_pdfs), desc="Processing PDFs") as pbar:
                 for future in as_completed(futures):
@@ -270,7 +268,7 @@ def main():
                         if result:
                             table_pdfs_found += 1
                             pbar.update(1)
-                            
+
                             if table_pdfs_found >= args.max_pdfs:
                                 print(f"Reached maximum number of PDFs with tables ({args.max_pdfs}), stopping")
                                 # Cancel remaining futures
@@ -284,7 +282,7 @@ def main():
         for s3_path in tqdm(pdf_paths, desc="Processing PDFs"):
             if process_pdf(s3_path, args.temp_dir, args.output_dir, api_key):
                 table_pdfs_found += 1
-                
+
                 if table_pdfs_found >= args.max_pdfs:
                     print(f"Reached maximum number of PDFs with tables ({args.max_pdfs}), stopping")
                     break

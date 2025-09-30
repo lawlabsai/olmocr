@@ -35,7 +35,12 @@ from tqdm import tqdm
 from olmocr.bench.katex.render import render_equation
 from olmocr.data.renderpdf import render_pdf_to_base64png
 from olmocr.prompts.anchor import get_anchor_text
-from olmocr.prompts.prompts import PageResponse, build_finetuning_prompt, build_no_anchoring_yaml_prompt, build_no_anchoring_v4_yaml_prompt
+from olmocr.prompts.prompts import (
+    PageResponse,
+    build_finetuning_prompt,
+    build_no_anchoring_v4_yaml_prompt,
+    build_no_anchoring_yaml_prompt,
+)
 
 # Type alias for samples
 Sample: TypeAlias = Dict[str, Any]

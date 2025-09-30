@@ -23,29 +23,29 @@
 #     full_hash TEXT              -- this is the original hash
 # );
 
-import json
-import sqlite3
 import argparse
-from pathlib import Path
-import re
+import json
 import os
+import re
+import sqlite3
+from pathlib import Path
 
 
 def get_bench_urls(bench_data_dir):
     """Read all JSONL files in bench_data directory and extract URLs."""
     bench_urls = set()
     bench_data_path = Path(bench_data_dir)
-    
+
     for jsonl_file in bench_data_path.rglob("*.jsonl"):
-        with open(jsonl_file, 'r') as f:
+        with open(jsonl_file, "r") as f:
             for line in f:
                 try:
                     data = json.loads(line)
-                    if 'url' in data:
-                        bench_urls.add(data['url'])
+                    if "url" in data:
+                        bench_urls.add(data["url"])
                 except json.JSONDecodeError:
                     continue
-    
+
     return bench_urls
 
 
@@ -53,7 +53,7 @@ def s3_url_to_hash(s3_url):
     """Convert S3 URL to hash format.
     e.g., s3://ai2-s2-pdfs/b2d8/3a50695174f1de4973248fcf03c681ba1218.pdf -> b2d83a50695174f1de4973248fcf03c681ba1218
     """
-    match = re.search(r's3://[^/]+/([^/]+)/([^.]+)', s3_url)
+    match = re.search(r"s3://[^/]+/([^/]+)/([^.]+)", s3_url)
     if match:
         prefix = match.group(1)
         hash_part = match.group(2)
@@ -65,7 +65,7 @@ def local_path_to_short_hash(local_path):
     """Extract short hash from local path format.
     e.g., ./synth_tables/56441bdefb2397d956da725903948e0893c9_pg1.pdf -> 56441bdefb2397d956da725903948e0893c9
     """
-    match = re.search(r'([a-f0-9]+)(?:_pg\d+)?\.pdf', local_path)
+    match = re.search(r"([a-f0-9]+)(?:_pg\d+)?\.pdf", local_path)
     if match:
         return match.group(1)
     return None
@@ -134,13 +134,13 @@ def find_and_handle_contaminated_files(metadata_jsonl_path, contaminated_pdf_ids
         remaining_tests = []
         removed_tests = 0
 
-        with open(jsonl_file, 'r') as f:
+        with open(jsonl_file, "r") as f:
             for line in f:
                 try:
                     test = json.loads(line)
                     # Check if this test belongs to a contaminated PDF
                     # Test PDFs are in format "{name}/{pdf_id}_page{page_num}.pdf"
-                    test_pdf = test.get('pdf', '')
+                    test_pdf = test.get("pdf", "")
                     is_contaminated = False
                     for pdf_id in contaminated_pdf_ids:
                         if f"{pdf_id}_page" in test_pdf:
@@ -156,9 +156,9 @@ def find_and_handle_contaminated_files(metadata_jsonl_path, contaminated_pdf_ids
         if removed_tests > 0:
             if delete_mode:
                 # Rewrite the file without contaminated tests
-                with open(jsonl_file, 'w') as f:
+                with open(jsonl_file, "w") as f:
                     for test in remaining_tests:
-                        f.write(json.dumps(test) + '\n')
+                        f.write(json.dumps(test) + "\n")
                 print(f"Removed {removed_tests} tests from {jsonl_file}")
             else:
                 print(f"Would remove {removed_tests} tests from {jsonl_file}")
@@ -178,7 +178,6 @@ def find_and_handle_contaminated_files(metadata_jsonl_path, contaminated_pdf_ids
                 except Exception as e:
                     print(f"    Error deleting: {e}")
 
-
         if delete_mode:
             print(f"\nSuccessfully deleted {len(files_to_delete)} files")
         else:
@@ -195,31 +194,31 @@ def check_contamination(bench_data_dir, metadata_jsonl_path, sqlite_db_path, del
     print(f"Bench data directory: {bench_data_dir}")
     print(f"Metadata JSONL: {metadata_jsonl_path}")
     print(f"SQLite database: {sqlite_db_path}\n")
-    
+
     # Step 1: Get all URLs from bench data
     print("Step 1: Reading URLs from bench data...")
     bench_urls = get_bench_urls(bench_data_dir)
     print(f"Found {len(bench_urls)} unique URLs in bench data\n")
-    
+
     # Step 2: Read metadata JSONL and process source URLs
     print("Step 2: Processing metadata JSONL...")
     metadata_entries = []
-    with open(metadata_jsonl_path, 'r') as f:
+    with open(metadata_jsonl_path, "r") as f:
         for line_num, line in enumerate(f, 1):
             try:
                 data = json.loads(line)
-                if 'source_url' in data:
+                if "source_url" in data:
                     metadata_entries.append(data)
             except json.JSONDecodeError:
                 print(f"Warning: Could not parse line {line_num}")
 
     print(f"Found {len(metadata_entries)} entries with source URLs in metadata\n")
-    
+
     # Step 3: Map URLs to hashes and query database
     print("Step 3: Mapping URLs and querying database...")
     conn = sqlite3.connect(sqlite_db_path)
     cursor = conn.cursor()
-    
+
     real_urls = set()
     unmapped_count = 0
     s3_count = 0
@@ -228,8 +227,8 @@ def check_contamination(bench_data_dir, metadata_jsonl_path, sqlite_db_path, del
     blank_url_entries = []  # Store entries with blank URLs
 
     for metadata_entry in metadata_entries:
-        source_url = metadata_entry.get('source_url')
-        pdf_id = metadata_entry.get('pdf_id', 'N/A')
+        source_url = metadata_entry.get("source_url")
+        pdf_id = metadata_entry.get("pdf_id", "N/A")
         pdf_hash = None
 
         # Handle S3 URLs
@@ -256,19 +255,14 @@ def check_contamination(bench_data_dir, metadata_jsonl_path, sqlite_db_path, del
                 # Check if the looked up URL is empty/blank
                 if result[0] == "" or result[0] is None:
                     empty_result_count += 1
-                    blank_url_entries.append({
-                        'pdf_id': pdf_id,
-                        'source_url': source_url,
-                        'pdf_hash': pdf_hash,
-                        'db_result': result[0]
-                    })
+                    blank_url_entries.append({"pdf_id": pdf_id, "source_url": source_url, "pdf_hash": pdf_hash, "db_result": result[0]})
                 else:
                     real_urls.add(result[0])
         else:
             unmapped_count += 1
-    
+
     conn.close()
-    
+
     print(list(real_urls)[:5])
 
     print(f"Successfully mapped {len(real_urls)} URLs from database")
@@ -288,7 +282,7 @@ def check_contamination(bench_data_dir, metadata_jsonl_path, sqlite_db_path, del
             print(f"    DB Result: {repr(entry['db_result'])}")
         if len(blank_url_entries) > 20:
             print(f"  ... and {len(blank_url_entries) - 20} more entries with blank URLs\n")
-    
+
     # Step 4: Check for contamination
     print("Step 4: Checking for contamination...")
     contaminated_urls = bench_urls.intersection(real_urls)
@@ -298,15 +292,15 @@ def check_contamination(bench_data_dir, metadata_jsonl_path, sqlite_db_path, del
 
     # Add PDF IDs with blank URLs to contaminated set
     for entry in blank_url_entries:
-        pdf_id = entry.get('pdf_id', 'N/A')
-        if pdf_id != 'N/A':
+        pdf_id = entry.get("pdf_id", "N/A")
+        if pdf_id != "N/A":
             contaminated_pdf_ids.add(pdf_id)
 
     if contaminated_urls:
         # Find the pdf_ids that correspond to contaminated URLs
         for metadata_entry in metadata_entries:
-            source_url = metadata_entry.get('source_url')
-            pdf_id = metadata_entry.get('pdf_id', 'N/A')
+            source_url = metadata_entry.get("source_url")
+            pdf_id = metadata_entry.get("pdf_id", "N/A")
             pdf_hash = None
 
             # Process URL to get hash
@@ -374,50 +368,30 @@ def check_contamination(bench_data_dir, metadata_jsonl_path, sqlite_db_path, del
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Check for contamination between benchmark data and training data"
-    )
-    parser.add_argument(
-        "bench_data_dir",
-        help="Path to olmocr-bench/bench_data directory"
-    )
-    parser.add_argument(
-        "metadata_jsonl",
-        help="Path to metadata JSONL file"
-    )
-    parser.add_argument(
-        "sqlite_db",
-        help="Path to SQLite database with pdf_mapping table"
-    )
-    parser.add_argument(
-        "--delete",
-        action="store_true",
-        help="Delete contaminated files (default is dry run)"
-    )
+    parser = argparse.ArgumentParser(description="Check for contamination between benchmark data and training data")
+    parser.add_argument("bench_data_dir", help="Path to olmocr-bench/bench_data directory")
+    parser.add_argument("metadata_jsonl", help="Path to metadata JSONL file")
+    parser.add_argument("sqlite_db", help="Path to SQLite database with pdf_mapping table")
+    parser.add_argument("--delete", action="store_true", help="Delete contaminated files (default is dry run)")
 
     args = parser.parse_args()
-    
+
     # Validate paths
     if not Path(args.bench_data_dir).is_dir():
         print(f"Error: {args.bench_data_dir} is not a directory")
         return 1
-    
+
     if not Path(args.metadata_jsonl).is_file():
         print(f"Error: {args.metadata_jsonl} is not a file")
         return 1
-    
+
     if not Path(args.sqlite_db).is_file():
         print(f"Error: {args.sqlite_db} is not a file")
         return 1
-    
+
     # Run contamination check
-    contaminated_count = check_contamination(
-        args.bench_data_dir,
-        args.metadata_jsonl,
-        args.sqlite_db,
-        delete_mode=args.delete
-    )
-    
+    contaminated_count = check_contamination(args.bench_data_dir, args.metadata_jsonl, args.sqlite_db, delete_mode=args.delete)
+
     # Return non-zero exit code if contamination found
     return 1 if contaminated_count > 0 else 0
 
