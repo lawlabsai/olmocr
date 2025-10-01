@@ -116,15 +116,15 @@ We also ship a comprehensive benchmark suite covering over 7,000 test cases acro
     </tr>
     <tr>
       <td align="left">olmOCR v0.2.0</td>
-      <td align="center"><strong>78.8</strong></td>
+      <td align="center">78.8</td>
       <td align="center">77.5</td>
       <td align="center">71.9</td>
-      <td align="center"><strong>45.4</strong></td>
+      <td align="center">45.4</td>
       <td align="center">94.2</td>
-      <td align="center"><strong>78.6</strong></td>
+      <td align="center">78.6</td>
       <td align="center">81.4</td>
-      <td align="center"><strong>99.8</strong></td>
-      <td align="center"><strong>78.5 ± 1.1</strong></td>
+      <td align="center">99.8</td>
+      <td align="center">78.5 ± 1.1</td>
     </tr>
     <tr>
       <td align="left">olmOCR v0.3.0</td>
