@@ -35,7 +35,8 @@ Features:
  - (Based on a 7B parameter VLM, so it requires a GPU)
 
 ### News
- - August 13, 2024 - v0.3.0 - [New model release](https://huggingface.co/allenai/olmOCR-7B-0825-FP8), fixes auto-rotation detection, and hallucinations on blank documents.
+ - October 1, 2025 - v0.4.0 - [New model release](https://huggingface.co/allenai/olmOCR-7B-1025-FP8), boosts olmOCR-bench score by ~4 points using RL training
+ - August 13, 2025 - v0.3.0 - [New model release](https://huggingface.co/allenai/olmOCR-7B-0825-FP8), fixes auto-rotation detection, and hallucinations on blank documents.
  - July 24, 2025 - v0.2.1 - [New model release](https://huggingface.co/allenai/olmOCR-7B-0725-FP8), scores 3 points higher on [olmOCR-Bench](https://github.com/allenai/olmocr/tree/main/olmocr/bench), also runs significantly faster because it's default FP8, and needs much fewer retries per document.
  - July 23, 2025 - v0.2.0 - New cleaned up [trainer code](https://github.com/allenai/olmocr/tree/main/olmocr/train), makes it much simpler to train olmOCR models yourself.
  - June 17, 2025 - v0.1.75 - Switch from sglang to vllm based inference pipeline, updated docker image to CUDA 12.8.
@@ -137,6 +138,18 @@ We also ship a comprehensive benchmark suite covering over 7,000 test cases acro
       <td align="center">98.9</td>
       <td align="center">78.5 ± 1.1</td>
     </tr>       
+    <tr>
+      <td align="left">olmOCR v0.4.0</td>
+      <td align="center">83.0</td>
+      <td align="center">82.3</td>
+      <td align="center">84.9</td>
+      <td align="center">47.7</td>
+      <td align="center">96.1</td>
+      <td align="center">83.7</td>
+      <td align="center">81.9</td>
+      <td align="center">99.7</td>
+      <td align="center">82.4 ± 1.1</td>
+    </tr>   
   </tbody>
 </table>
 
