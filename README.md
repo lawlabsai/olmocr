@@ -129,7 +129,7 @@ We also ship a comprehensive benchmark suite covering over 7,000 test cases acro
     <tr>
       <td align="left">olmOCR v0.3.0</td>
       <td align="center">78.6</td>
-      <td align="center"><strong>79.9</strong></td>
+      <td align="center">79.9</td>
       <td align="center">72.9</td>
       <td align="center">43.9</td>
       <td align="center">95.1</td>
@@ -137,19 +137,19 @@ We also ship a comprehensive benchmark suite covering over 7,000 test cases acro
       <td align="center">81.2</td>
       <td align="center">98.9</td>
       <td align="center">78.5 ± 1.1</td>
-    </tr>       
+    </tr>   
     <tr>
       <td align="left">olmOCR v0.4.0</td>
-      <td align="center">83.0</td>
-      <td align="center">82.3</td>
-      <td align="center">84.9</td>
-      <td align="center">47.7</td>
+      <td align="center"><strong>83.0</strong></td>
+      <td align="center"><strong>82.3</strong></td>
+      <td align="center"><strong>77.7</strong></td>
+      <td align="center"><strong>47.7</strong></td>
       <td align="center">96.1</td>
-      <td align="center">83.7</td>
-      <td align="center">81.9</td>
-      <td align="center">99.7</td>
-      <td align="center">82.4 ± 1.1</td>
-    </tr>   
+      <td align="center"><strong>83.7</strong></td>
+      <td align="center"><strong>84.6</strong></td>
+      <td align="center"><strong>99.8</strong></td>
+      <td align="center"><strong>82.4 ± 1.1</strong></td>
+    </tr>  
   </tbody>
 </table>
 
