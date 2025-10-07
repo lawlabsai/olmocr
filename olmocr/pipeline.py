@@ -105,7 +105,7 @@ class PageResult:
     is_fallback: bool
 
 
-async def build_page_query(local_pdf_path: str, page: int, target_longest_image_dim: int, image_rotation: int = 0) -> dict:
+async def build_page_query(local_pdf_path: str, page: int, target_longest_image_dim: int, image_rotation: int = 0, model_name: str = "olmocr") -> dict:
     MAX_TOKENS = 8000
     assert image_rotation in [0, 90, 180, 270], "Invalid image rotation provided in build_page_query"
 
