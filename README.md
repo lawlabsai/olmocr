@@ -140,15 +140,15 @@ We also ship a comprehensive benchmark suite covering over 7,000 test cases acro
     </tr>   
     <tr>
       <td align="left">olmOCR pipeline v0.4.0</td>
-      <td align="center">83.0</td>
-      <td align="center">82.3</td>
-      <td align="center">84.9</td>
-      <td align="center">47.7</td>
+      <td align="center"><strong>83.0</strong></td>
+      <td align="center"><strong>82.3</strong></td>
+      <td align="center"><strong>84.9</strong></td>
+      <td align="center"><strong>47.7</strong></td>
       <td align="center">96.1</td>
-      <td align="center">83.7</td>
+      <td align="center"><strong>83.7</strong></td>
       <td align="center">81.9</td>
       <td align="center">99.7</td>
-      <td align="center">82.4 ± 1.1</td>
+      <td align="center"><strong>82.4 ± 1.1</strong></td>
     </tr>  
   </tbody>
 </table>
