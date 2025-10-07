@@ -209,6 +209,43 @@ python -m olmocr.pipeline ./localworkspace --markdown --pdfs tests/gnarly_pdfs/*
 
 With the addition of the `--markdown` flag, results will be stored as markdown files inside of `./localworkspace/markdown/`. 
 
+### Using External vLLM Server
+
+If you have a vLLM server already running elsewhere (or any inference platform implementing the relevant subset of the OpenAI API), you can point olmOCR to use it instead of spawning a local instance:
+
+```bash
+# Use external vLLM server instead of local one
+python -m olmocr.pipeline ./localworkspace --server http://remote-server:8000 --markdown --pdfs tests/gnarly_pdfs/*.pdf
+```
+
+The served model name should be `olmocr`. An example vLLM launch command would be:
+```bash
+vllm serve allenai/olmOCR-7B-0825-FP8 --served-model-name olmocr --max-model-len 16384
+```
+
+#### Run olmOCR with the DeepInfra server endpoint:
+Signup at [DeepInfra](https://deepinfra.com/) and get your API key from the DeepInfra dashboard.
+Store the API key as an environment variable.
+```bash
+export DEEPINFRA_API_KEY="your-api-key-here"
+```
+
+```bash
+python -m olmocr.pipeline ./localworkspace \
+  --server https://api.deepinfra.com/v1/openai \
+  --api_key $DEEPINFRA_API_KEY \
+  --pages_per_group 100 \
+  --model allenai/olmOCR-7B-0825 \
+  --markdown \
+  --pdfs path/to/your/*.pdf
+```
+- `--server`: DeepInfra's OpenAI-compatible endpoint: `https://api.deepinfra.com/v1/openai`
+- `--api_key`: Your DeepInfra API key
+- `--pages_per_group`: You may want a smaller number of pages per group as many external provides have lower concurrent request limits
+- `--model`: The model identifier on DeepInfra: `allenai/olmOCR-7B-0825`
+- Other arguments work the same as with local inference
+
+
 #### Viewing Results
 
 The `./localworkspace/` workspace folder will then have both [Dolma](https://github.com/allenai/dolma) and markdown files (if using `--markdown`).
@@ -249,6 +286,7 @@ For example:
 python -m olmocr.pipeline s3://my_s3_bucket/pdfworkspaces/exampleworkspace --pdfs s3://my_s3_bucket/jakep/gnarly_pdfs/*.pdf --beaker --beaker_gpus 4
 ```
 
+
 ### Using Docker
 
 Pull the Docker image.
@@ -284,7 +322,7 @@ python -m olmocr.pipeline ./localworkspace --markdown --pdfs olmocr-sample.pdf
 python -m olmocr.pipeline --help
 usage: pipeline.py [-h] [--pdfs [PDFS ...]] [--model MODEL] [--workspace_profile WORKSPACE_PROFILE] [--pdf_profile PDF_PROFILE] [--pages_per_group PAGES_PER_GROUP] [--max_page_retries MAX_PAGE_RETRIES] [--max_page_error_rate MAX_PAGE_ERROR_RATE] [--workers WORKERS]
                    [--apply_filter] [--stats] [--markdown] [--target_longest_image_dim TARGET_LONGEST_IMAGE_DIM] [--target_anchor_text_len TARGET_ANCHOR_TEXT_LEN] [--guided_decoding] [--gpu-memory-utilization GPU_MEMORY_UTILIZATION] [--max_model_len MAX_MODEL_LEN]
-                   [--tensor-parallel-size TENSOR_PARALLEL_SIZE] [--data-parallel-size DATA_PARALLEL_SIZE] [--port PORT] [--beaker] [--beaker_workspace BEAKER_WORKSPACE] [--beaker_cluster BEAKER_CLUSTER] [--beaker_gpus BEAKER_GPUS] [--beaker_priority BEAKER_PRIORITY]
+                   [--tensor-parallel-size TENSOR_PARALLEL_SIZE] [--data-parallel-size DATA_PARALLEL_SIZE] [--port PORT] [--server SERVER] [--beaker] [--beaker_workspace BEAKER_WORKSPACE] [--beaker_cluster BEAKER_CLUSTER] [--beaker_gpus BEAKER_GPUS] [--beaker_priority BEAKER_PRIORITY]
                    workspace
 
 Manager for running millions of PDFs through a batch inference pipeline
@@ -316,7 +354,7 @@ options:
                         Maximum amount of anchor text to use (characters), not used for new models
   --guided_decoding     Enable guided decoding for model YAML type outputs
 
-VLLM Forwarded arguments:
+VLLM arguments:
   --gpu-memory-utilization GPU_MEMORY_UTILIZATION
                         Fraction of VRAM vLLM may pre-allocate for KV-cache (passed through to vllm serve).
   --max_model_len MAX_MODEL_LEN
@@ -326,6 +364,9 @@ VLLM Forwarded arguments:
   --data-parallel-size DATA_PARALLEL_SIZE, -dp DATA_PARALLEL_SIZE
                         Data parallel size for vLLM
   --port PORT           Port to use for the VLLM server
+  --server SERVER       URL of external vLLM (or other compatible provider)
+                        server (e.g., http://hostname:port). If provided,
+                        skips spawning local vLLM instance
 
 beaker/cluster execution:
   --beaker              Submit this job to beaker instead of running locally

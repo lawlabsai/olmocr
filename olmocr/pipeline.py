@@ -11,6 +11,7 @@ import os
 import random
 import re
 import shutil
+import ssl
 import sys
 import tempfile
 import time
@@ -132,7 +133,7 @@ async def build_page_query(local_pdf_path: str, page: int, target_longest_image_
         image_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
     return {
-        "model": "olmocr",
+        "model": model_name,
         "messages": [
             {
                 "role": "user",
@@ -151,29 +152,44 @@ async def build_page_query(local_pdf_path: str, page: int, target_longest_image_
 # It feels strange perhaps, but httpx and aiohttp are very complex beasts
 # Ex. the sessionpool in httpcore has 4 different locks in it, and I've noticed
 # that at the scale of 100M+ requests, that they deadlock in different strange ways
-async def apost(url, json_data):
+async def apost(url, json_data, api_key=None):
     parsed_url = urlparse(url)
     host = parsed_url.hostname
-    port = parsed_url.port or 80
+    # Default to 443 for HTTPS, 80 for HTTP
+    if parsed_url.scheme == "https":
+        port = parsed_url.port or 443
+        use_ssl = True
+    else:
+        port = parsed_url.port or 80
+        use_ssl = False
     path = parsed_url.path or "/"
 
     writer = None
     try:
-        reader, writer = await asyncio.open_connection(host, port)
+        if use_ssl:
+            ssl_context = ssl.create_default_context()
+            reader, writer = await asyncio.open_connection(host, port, ssl=ssl_context)
+        else:
+            reader, writer = await asyncio.open_connection(host, port)
 
         json_payload = json.dumps(json_data)
-        request = (
-            f"POST {path} HTTP/1.1\r\n"
-            f"Host: {host}\r\n"
-            f"Content-Type: application/json\r\n"
-            f"Content-Length: {len(json_payload)}\r\n"
-            f"Connection: close\r\n\r\n"
-            f"{json_payload}"
-        )
+
+        headers = [
+            f"POST {path} HTTP/1.1",
+            f"Host: {host}",
+            f"Content-Type: application/json",
+            f"Content-Length: {len(json_payload)}",
+        ]
+
+        if api_key:
+            headers.append(f"Authorization: Bearer {api_key}")
+
+        headers.append("Connection: close")
+
+        request = "\r\n".join(headers) + "\r\n\r\n" + json_payload
         writer.write(request.encode())
         await writer.drain()
 
-        # Read status line
         status_line = await reader.readline()
         if not status_line:
             raise ConnectionError("No response from server")
@@ -213,7 +229,16 @@ async def apost(url, json_data):
 
 
 async def process_page(args, worker_id: int, pdf_orig_path: str, pdf_local_path: str, page_num: int) -> PageResult:
-    COMPLETION_URL = f"http://localhost:{BASE_SERVER_PORT}/v1/chat/completions"
+    if args.server:
+        server_url = args.server.rstrip("/")
+        # Check if the server URL already contains '/v1/openai' (DeepInfra case)
+        if "/v1/openai" in server_url:
+            COMPLETION_URL = f"{server_url}/chat/completions"
+        else:
+            COMPLETION_URL = f"{server_url}/v1/chat/completions"
+        logger.debug(f"Using completion URL: {COMPLETION_URL}")
+    else:
+        COMPLETION_URL = f"http://localhost:{BASE_SERVER_PORT}/v1/chat/completions"
     MAX_RETRIES = args.max_page_retries
     MODEL_MAX_CONTEXT = 16384
     TEMPERATURE_BY_ATTEMPT = [0.1, 0.1, 0.2, 0.3, 0.5, 0.8, 0.9, 1.0]
@@ -224,11 +249,19 @@ async def process_page(args, worker_id: int, pdf_orig_path: str, pdf_local_path:
 
     while attempt < MAX_RETRIES:
         lookup_attempt = min(attempt, len(TEMPERATURE_BY_ATTEMPT) - 1)
+        # For external servers (like DeepInfra), use the model name from args
+        # For local inference, always use 'olmocr'
+        if args.server and hasattr(args, "model"):
+            model_name = args.model
+        else:
+            model_name = "olmocr"
+
         query = await build_page_query(
             pdf_local_path,
             page_num,
             args.target_longest_image_dim,
             image_rotation=cumulative_rotation,
+            model_name=model_name,
         )
         # Change temperature as number of attempts increases to overcome repetition issues at expense of quality
         query["temperature"] = TEMPERATURE_BY_ATTEMPT[lookup_attempt]
@@ -242,10 +275,17 @@ async def process_page(args, worker_id: int, pdf_orig_path: str, pdf_local_path:
         logger.debug(f"Built page query for {pdf_orig_path}-{page_num}")
 
         try:
-            status_code, response_body = await apost(COMPLETION_URL, json_data=query)
+            # Passing API key only for external servers that need authentication
+            if args.server and hasattr(args, "api_key"):
+                api_key = args.api_key
+            else:
+                api_key = None
+            status_code, response_body = await apost(COMPLETION_URL, json_data=query, api_key=api_key)
 
             if status_code == 400:
                 raise ValueError(f"Got BadRequestError from server: {response_body}, skipping this response")
+            elif status_code == 429:
+                raise ConnectionError(f"Too many requests, doing exponential backoff")
             elif status_code == 500:
                 raise ValueError(f"Got InternalServerError from server: {response_body}, skipping this response")
             elif status_code != 200:
@@ -596,6 +636,8 @@ async def vllm_server_task(model_name_or_path, args, semaphore, unknown_args=Non
         str(args.tensor_parallel_size),
         "--data-parallel-size",
         str(args.data_parallel_size),
+        "--limit-mm-per-prompt",
+        '{"video": 0}',  # Disabling video encoder saves RAM that you can put towards the KV cache, thanks @charitarthchugh
     ]
 
     if args.gpu_memory_utilization is not None:
@@ -730,15 +772,27 @@ async def vllm_server_host(model_name_or_path, args, semaphore, unknown_args=Non
         sys.exit(1)
 
 
-async def vllm_server_ready():
+async def vllm_server_ready(args):
     max_attempts = 300
     delay_sec = 1
-    url = f"http://localhost:{BASE_SERVER_PORT}/v1/models"
+    if args.server:
+        # Check if the server URL already contains '/v1/openai' (DeepInfra case)
+        server_url = args.server.rstrip("/")
+        if "/v1/openai" in server_url:
+            url = f"{server_url}/models"
+        else:
+            url = f"{server_url}/v1/models"
+    else:
+        url = f"http://localhost:{BASE_SERVER_PORT}/v1/models"
 
     for attempt in range(1, max_attempts + 1):
         try:
+            headers = {}
+            if args.server and hasattr(args, "api_key") and args.api_key:
+                headers["Authorization"] = f"Bearer {args.api_key}"
+
             async with httpx.AsyncClient() as session:
-                response = await session.get(url)
+                response = await session.get(url, headers=headers)
 
                 if response.status_code == 200:
                     logger.info("vllm server is ready.")
@@ -1058,6 +1112,7 @@ async def main():
     parser.add_argument("--target_longest_image_dim", type=int, help="Dimension on longest side to use for rendering the pdf pages", default=1288)
     parser.add_argument("--target_anchor_text_len", type=int, help="Maximum amount of anchor text to use (characters), not used for new models", default=-1)
     parser.add_argument("--guided_decoding", action="store_true", help="Enable guided decoding for model YAML type outputs")
+    parser.add_argument("--api_key", type=str, default=None, help="API key for authenticated remote servers (e.g., DeepInfra)")
 
     vllm_group = parser.add_argument_group(
         "VLLM arguments", "These arguments are passed to vLLM. Any unrecognized arguments are also automatically forwarded to vLLM."
@@ -1069,6 +1124,11 @@ async def main():
     vllm_group.add_argument("--tensor-parallel-size", "-tp", type=int, default=1, help="Tensor parallel size for vLLM")
     vllm_group.add_argument("--data-parallel-size", "-dp", type=int, default=1, help="Data parallel size for vLLM")
     vllm_group.add_argument("--port", type=int, default=30024, help="Port to use for the VLLM server")
+    vllm_group.add_argument(
+        "--server",
+        type=str,
+        help="URL of external vLLM (or other compatible provider) server (e.g., http://hostname:port). If provided, skips spawning local vLLM instance",
+    )
 
     # Beaker/job running stuff
     beaker_group = parser.add_argument_group("beaker/cluster execution")
@@ -1207,12 +1267,17 @@ async def main():
 
     # If you get this far, then you are doing inference and need a GPU
     # check_sglang_version()
-    check_torch_gpu_available()
+    if not args.server:
+        check_torch_gpu_available()
 
     logger.info(f"Starting pipeline with PID {os.getpid()}")
 
     # Download the model before you do anything else
-    model_name_or_path = await download_model(args.model)
+    if args.server:
+        logger.info(f"Using external server at {args.server}")
+        model_name_or_path = None
+    else:
+        model_name_or_path = await download_model(args.model)
 
     # Initialize the work queue
     qsize = await work_queue.initialize_queue()
@@ -1226,9 +1291,12 @@ async def main():
     # As soon as one worker is no longer saturating the gpu, the next one can start sending requests
     semaphore = asyncio.Semaphore(1)
 
-    vllm_server = asyncio.create_task(vllm_server_host(model_name_or_path, args, semaphore, unknown_args))
+    # Start local vLLM instance if not using external one
+    vllm_server = None
+    if not args.server:
+        vllm_server = asyncio.create_task(vllm_server_host(model_name_or_path, args, semaphore, unknown_args))
 
-    await vllm_server_ready()
+    await vllm_server_ready(args)
 
     metrics_task = asyncio.create_task(metrics_reporter(work_queue))
 
@@ -1241,11 +1309,16 @@ async def main():
     # Wait for all worker tasks to finish
     await asyncio.gather(*worker_tasks)
 
-    vllm_server.cancel()
+    # Cancel vLLM server if it was started
+    if vllm_server is not None:
+        vllm_server.cancel()
     metrics_task.cancel()
 
     # Wait for cancelled tasks to complete
-    await asyncio.gather(vllm_server, metrics_task, return_exceptions=True)
+    tasks_to_wait = [metrics_task]
+    if vllm_server is not None:
+        tasks_to_wait.append(vllm_server)
+    await asyncio.gather(*tasks_to_wait, return_exceptions=True)
 
     # Output final metrics summary
     metrics_summary = metrics.get_metrics_summary()

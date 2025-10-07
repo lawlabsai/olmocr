@@ -130,7 +130,7 @@ def normalize_text(md_content: str) -> str:
     md_content = re.sub(r"\*(.*?)\*", r"\1", md_content)
     md_content = re.sub(r"_(.*?)_", r"\1", md_content)
 
-    # Convert down to a consistent unicode form, so é == e + accent, unicode forms
+    # Convert down to a consistent unicode form, so é == e + accent, unicode forms
     md_content = unicodedata.normalize("NFC", md_content)
 
     # Dictionary of characters to replace: keys are fancy characters, values are ASCII equivalents, unicode micro with greek mu comes up often enough too
