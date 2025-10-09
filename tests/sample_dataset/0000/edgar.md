@@ -2,7 +2,7 @@
 primary_language: en
 is_rotation_valid: True
 rotation_correction: 0
-is_table: False
+is_table: True
 is_diagram: False
 ---
 Edgar (or Eadgar;[1] c. 944 – 8 July 975) was King of the English from 959 until his death in 975. He became king of all England on his brother's death. He was the younger son of King Edmund I and his first wife Ælfgifu. A detailed account of Edgar's reign is not possible, because only a few events were recorded by chroniclers and monastic writers were more interested in recording the activities of the leaders of the church.

@@ -17,6 +17,8 @@ import tarfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional, Tuple
+from olmocr.prompts import PageResponse
+from olmocr.train.dataloader import FrontMatterParser
 
 import pandas as pd
 import yaml
@@ -44,27 +46,7 @@ class DocumentRecord:
     pdf_relpath: Optional[str] = None
 
 
-def parse_front_matter(markdown_text: str) -> Tuple[Dict[str, object], str]:
-    """
-    Parse YAML front matter from a markdown string.
 
-    Returns a tuple of (front_matter_dict, body_text).
-    """
-    if not markdown_text.startswith("---"):
-        return {}, markdown_text.strip()
-
-    closing_idx = markdown_text.find("\n---", 3)
-    if closing_idx == -1:
-        return {}, markdown_text.strip()
-
-    fm_block = markdown_text[3:closing_idx]
-    remainder = markdown_text[closing_idx + 4 :]
-
-    front_matter = yaml.safe_load(fm_block) or {}
-    # Preserve internal spacing but trim a single leading newline if present.
-    if remainder.startswith("\n"):
-        remainder = remainder[1:]
-    return front_matter, remainder
 
 
 def infer_doc_id(md_path: Path, processed_root: Path) -> str:
@@ -108,24 +90,7 @@ def normalize_response_payload(front_matter: Dict[str, object], body_text: str) 
 
 
 def guess_url(front_matter: Dict[str, object], doc_id: str, source_url_template: Optional[str]) -> Optional[str]:
-    """
-    Infer a URL for the document.
-
-    Priority:
-      1. Front matter fields named url/source_url/pdf_url
-      2. Provided template with placeholders {doc_id}, {prefix}, {base_id}
-    """
-    for key in ("url", "source_url", "pdf_url", "uri"):
-        value = front_matter.get(key)
-        if isinstance(value, str) and value:
-            return value
-
-    if source_url_template:
-        prefix = doc_id[:4]
-        base_id = doc_id[4:]
-        base_pdf = base_id.rsplit("-", 1)[0] if "-" in base_id else base_id
-        return source_url_template.format(doc_id=doc_id, prefix=prefix, base_id=base_id, base_pdf=base_pdf)
-
+    # TODO, we will have to add some better support for this
     return None
 
 
@@ -165,12 +130,14 @@ def collect_documents(
         "natural_text",
     }
 
+    parser = FrontMatterParser(front_matter_class=PageResponse)
+
     for md_path in tqdm(md_files, desc="Scanning markdown files"):
         try:
             doc_id = infer_doc_id(md_path, processed_dir)
             pdf_path = infer_pdf_path(md_path, doc_id, pdf_root)
             markdown_text = md_path.read_text(encoding="utf-8")
-            front_matter, body_text = parse_front_matter(markdown_text)
+            front_matter, body_text = parser._extract_front_matter_and_text(markdown_text)
             response_payload = normalize_response_payload(front_matter, body_text)
             pdf_size = pdf_path.stat().st_size
             page_number = parse_page_number(doc_id, front_matter)
