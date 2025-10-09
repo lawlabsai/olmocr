@@ -529,7 +529,6 @@ class DatasetTextRuleFilter(PipelineStep):
     Filters out samples that:
     - Contain markdown tables
     - Contain malformed HTML tables
-    - Contain <br> tags within HTML table cells
     - Contain math equations that fail to render
     - Contain mathematical symbols (∈, ∉, ⊂, ⊃, ⊆, ⊇, ∅, ∪, ∩, ∀, ∃, ¬) outside of table cells
     - Contain LaTeX formatting commands (\\textit, \\textbf, \\texttt, etc.) outside of math equations
@@ -915,10 +914,8 @@ class DatasetTextRuleFilter(PipelineStep):
         if not self._extract_and_validate_html_tables(text):
             return None  # Filter out samples with malformed HTML tables
 
-        # Check for <br> tags in table cells
+        # We had a check for <br> tags in table cells
         # Note, this was maybe removing too much stuff
-        # if self._contains_br_in_table_cells(text):
-        #     return None  # Filter out samples with <br> tags in table cells
 
         # Check if all math equations can render without errors
         if not self._validate_math_equations(text):
