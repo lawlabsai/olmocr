@@ -192,3 +192,4 @@ log_level = "DEBUG"
 markers = [
     "nonci: mark test as not intended for CI runs"
 ]
+addopts = "-m 'not nonci'"
