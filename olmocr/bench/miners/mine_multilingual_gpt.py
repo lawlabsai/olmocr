@@ -26,6 +26,7 @@ from tqdm import tqdm
 
 from olmocr.data.renderpdf import render_pdf_to_base64png
 from olmocr.filter import PdfFilter
+from lingua import Language
 
 TARGET_IMAGE_DIM = 1024
 
@@ -146,7 +147,7 @@ def process_pdf(s3_path: str, temp_dir: str, output_dir: str, api_key: str) -> b
     if not download_pdf_from_s3(s3_path, local_pdf_path):
         return False
 
-    pdf_filter = PdfFilter()
+    pdf_filter = PdfFilter(languages_to_keep=Language.all())
 
     if pdf_filter.filter_out_pdf(local_pdf_path):
         print(f"Filtering out {pdf_filename}")
@@ -287,7 +288,7 @@ def main():
                     print(f"Reached maximum number of PDFs with tables ({args.max_pdfs}), stopping")
                     break
 
-    print(f"Found and copied {table_pdfs_found} PDFs with tables to {args.output_dir}")
+    print(f"Found and copied {table_pdfs_found} PDFs to {args.output_dir}")
 
 
 if __name__ == "__main__":

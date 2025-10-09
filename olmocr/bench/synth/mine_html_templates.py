@@ -341,7 +341,7 @@ async def generate_html_from_image(client, image_base64):
     try:
         # Step 1: Initial analysis and column detection
         analysis_response = await client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-5-20250929",
             max_tokens=2000,
             temperature=0.1,
             messages=[
@@ -375,7 +375,7 @@ async def generate_html_from_image(client, image_base64):
 
         # Step 2: Initial HTML generation with detailed layout instructions
         initial_response = await client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-5-20250929",
             max_tokens=6000,
             temperature=0.2,
             messages=[
