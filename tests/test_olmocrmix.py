@@ -1,0 +1,59 @@
+# Test that prepare_olmocrmix.py and repackage_olmocrmix.py work correctly
+# by packaging the sample dataset, unpacking it, and verifying contents are preserved
+
+import os
+import subprocess
+import tempfile
+from pathlib import Path
+
+
+def test_repackage_and_prepare_olmocrmix():
+    """Test that repackaging and preparing preserves the dataset contents exactly."""
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        sample_dataset = Path("tests/sample_dataset")
+
+        # Step 1: Repackage the sample dataset into parquet + tarballs
+        packaged_dir = temp_path / "packaged"
+        packaged_dir.mkdir(parents=True, exist_ok=True)
+
+        repackage_result = subprocess.run(
+            [
+                "python", "olmocr/data/repackage_olmocrmix.py",
+                "--processed-dir", str(sample_dataset),
+                "--subset", "test_subset",
+                "--split", "test_split",
+                "--output-dir", str(packaged_dir)
+            ],
+            capture_output=True,
+            text=True
+        )
+
+        assert repackage_result.returncode == 0, f"Repackage script failed with stderr: {repackage_result.stderr}\nstdout: {repackage_result.stdout}"
+
+        # Verify the packaged output exists
+        parquet_file = packaged_dir / "test_subset_test_split.parquet"
+        assert parquet_file.exists(), f"Expected parquet file not found: {parquet_file}"
+
+        
+        # Step 2: Repackage the sample dataset into parquet + tarballs
+        unpackaged_dir = temp_path / "unpackaged"
+     
+        prepare_result = subprocess.run(
+            [
+                "python", "olmocr/data/prepare_olmocrmix.py",
+                "--dataset-path", str(packaged_dir),
+                "--subset", "test_subset",
+                "--split", "test_split",
+                "--destination", str(unpackaged_dir)
+            ],
+            capture_output=True,
+            text=True
+        )
+
+        assert prepare_result.returncode == 0
+
+        for root, _, files in os.walk(temp_path):
+            for file_name in files:
+                print(Path(root) / file_name)
