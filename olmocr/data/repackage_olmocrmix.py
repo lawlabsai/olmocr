@@ -54,7 +54,7 @@ def infer_doc_id(md_path: Path, processed_root: Path) -> str:
     rel = md_path.relative_to(processed_root)
     if len(rel.parts) < 2:
         stem = rel.stem
-        prefix = rel.stem[:4]
+        prefix = rel.stem
     else:
         prefix = rel.parts[0]
         stem = Path(rel.parts[-1]).stem
