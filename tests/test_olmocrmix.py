@@ -57,3 +57,22 @@ def test_repackage_and_prepare_olmocrmix():
         for root, _, files in os.walk(temp_path):
             for file_name in files:
                 print(Path(root) / file_name)
+
+        unpacked_processed = unpackaged_dir / "processed_test_subset_test_split"
+        assert unpacked_processed.exists(), f"Unpacked processed dir missing: {unpacked_processed}"
+
+        def relative_files(root: Path):
+            return sorted(
+                path.relative_to(root)
+                for path in root.rglob("*")
+                if path.is_file()
+            )
+
+        sample_files = relative_files(sample_dataset)
+        unpacked_files = relative_files(unpacked_processed)
+        assert sample_files == unpacked_files, "Mismatch in files between sample dataset and unpacked output"
+
+        for relative_path in sample_files:
+            sample_contents = (sample_dataset / relative_path).read_bytes()
+            unpacked_contents = (unpacked_processed / relative_path).read_bytes()
+            assert sample_contents == unpacked_contents, f"File contents differ for {relative_path}"
