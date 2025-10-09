@@ -229,8 +229,6 @@ def prepare_olmocr_mix(dataset_path: str, subset: str, split: str, destination: 
 
                 assert len(doc_id) > 4
 
-                response_data = response
-
                 # Create folder structure
                 # For allenai/olmOCR-mix-0225: use first 4 characters as folder
                 # For other datasets: preserve the existing structure

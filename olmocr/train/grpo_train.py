@@ -18,7 +18,7 @@ import torch
 import torch.distributed as dist
 import wandb
 from PIL import Image
-from rapidfuzz import fuzz
+from rapidfuzz import fuzz, distance
 from torch.utils.data import Dataset
 from transformers import (
     AutoProcessor,
@@ -132,7 +132,7 @@ class OlmOCRBenchDataset(Dataset):
                 parser = FrontMatterParser(front_matter_class=PageResponse)
                 try:
                     front_matter, text = parser._extract_front_matter_and_text(content)
-                    page_response = parser._parse_front_matter(front_matter, text)
+                    _page_response = parser._parse_front_matter(front_matter, text)
                     # Parsing succeeded, return the original content
                     return content
                 except Exception as parse_error:

@@ -105,7 +105,7 @@ def scan_existing_outputs(output_dir: Path) -> Set[str]:
         # Verify PDF files are not empty (md can be empty)
         for filename in complete_files:
             pdf_path = dataset_dir / f"{filename}.pdf"
-            md_path = dataset_dir / f"{filename}.md"
+            _md_path = dataset_dir / f"{filename}.md"
             if pdf_path.stat().st_size > 0:  # Only PDF needs to be non-empty
                 processed_assets.add(filename)
 

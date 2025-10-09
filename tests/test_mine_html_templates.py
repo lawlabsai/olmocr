@@ -1182,7 +1182,7 @@ class TestMathExtraction(unittest.TestCase):
         """
 
         # Mock the validation to always pass for math tests
-        with patch("olmocr.bench.synth.mine_html_templates.load_single_test") as mock_load:
+        with patch("olmocr.bench.tests.load_single_test") as mock_load:
             mock_test = MagicMock()
             mock_test.run.return_value = (True, None)
             mock_load.return_value = mock_test
