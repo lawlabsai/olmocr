@@ -1,10 +1,11 @@
 import argparse
 import json
 import tarfile
+import shutil
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from os import PathLike
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import pandas as pd
 from huggingface_hub import snapshot_download
@@ -20,6 +21,99 @@ def extract_tarball(tarball_path: Path, extract_dir: Path) -> int:
     except Exception as e:
         print(f"Error extracting {tarball_path}: {e}")
         return 0
+
+
+PAGE_RESPONSE_COLUMNS = [
+    "primary_language",
+    "is_rotation_valid",
+    "rotation_correction",
+    "is_table",
+    "is_diagram",
+    "natural_text",
+]
+
+
+def _coerce_optional(value: Any) -> Optional[Any]:
+    """Convert pandas nulls to None."""
+    if pd.isna(value):
+        return None
+    return value
+
+
+def _coerce_bool(value: Any, default: bool) -> bool:
+    if value is None or pd.isna(value):
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(int(value))
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"true", "1", "yes", "y"}:
+            return True
+        if lowered in {"false", "0", "no", "n"}:
+            return False
+    return default
+
+
+def _coerce_rotation(value: Any, default: int = 0) -> int:
+    if value is None or pd.isna(value):
+        return default
+    try:
+        rotation = int(value)
+        if rotation in {0, 90, 180, 270}:
+            return rotation
+    except (TypeError, ValueError):
+        pass
+    return default
+
+
+def _coerce_text(value: Any) -> Optional[str]:
+    if value is None or pd.isna(value):
+        return None
+    text = str(value)
+    return text if text.strip() else None
+
+
+def extract_response_from_row(row: pd.Series) -> dict[str, Any]:
+    """Return a PageResponse-like dict regardless of parquet schema."""
+    response_data: dict[str, Any] = {}
+    raw_response = row.get("response")
+
+    if isinstance(raw_response, str):
+        stripped = raw_response.strip()
+        if stripped:
+            try:
+                response_data = json.loads(stripped)
+            except json.JSONDecodeError:
+                response_data = {}
+    elif isinstance(raw_response, dict):
+        response_data = dict(raw_response)
+
+    if not response_data:
+        for column in PAGE_RESPONSE_COLUMNS:
+            if column in row:
+                response_data[column] = _coerce_optional(row[column])
+
+    extras = row.get("extras")
+    if isinstance(extras, str):
+        extras = extras.strip()
+        if extras:
+            try:
+                response_data.update(json.loads(extras))
+            except json.JSONDecodeError:
+                pass
+    elif isinstance(extras, dict):
+        response_data.update(extras)
+
+    response_data["primary_language"] = _coerce_optional(response_data.get("primary_language"))
+    response_data["is_rotation_valid"] = _coerce_bool(response_data.get("is_rotation_valid"), True)
+    response_data["rotation_correction"] = _coerce_rotation(response_data.get("rotation_correction"), 0)
+    response_data["is_table"] = _coerce_bool(response_data.get("is_table"), False)
+    response_data["is_diagram"] = _coerce_bool(response_data.get("is_diagram"), False)
+    response_data["natural_text"] = _coerce_text(response_data.get("natural_text"))
+
+    return response_data
 
 
 def prepare_olmocr_mix(dataset_path: str, subset: str, split: str, destination: str | PathLike, max_examples: Optional[int] = None) -> str:
@@ -38,33 +132,40 @@ def prepare_olmocr_mix(dataset_path: str, subset: str, split: str, destination: 
     hugging_face_dir = dest_path / "hugging_face"
     hugging_face_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"Downloading dataset {dataset_path} to {hugging_face_dir}...")
+    if Path(dataset_path).exists():
+        print("Dataset path is a local folder, using that")
+        local_dir = dataset_path
+        shutil.copytree(local_dir, hugging_face_dir, dirs_exist_ok=True)
+    else:
+        print(f"Downloading dataset {dataset_path} to {hugging_face_dir}...")
 
-    # Download the entire repository including PDFs and parquet files
-    local_dir = snapshot_download(
-        repo_id=dataset_path,
-        repo_type="dataset",
-        local_dir=hugging_face_dir,
-    )
+        # Download the entire repository including PDFs and parquet files
+        local_dir = snapshot_download(
+            repo_id=dataset_path,
+            repo_type="dataset",
+            local_dir=hugging_face_dir,
+        )
 
-    print(f"Downloaded to: {local_dir}")
+        print(f"Downloaded to: {local_dir}")
 
     # Step 2: Create destination folder structure for processed markdown files
     processed_dir = dest_path / f"processed_{subset}_{split}"
     processed_dir.mkdir(exist_ok=True)
 
     # Manual map to parquet files for now
-    assert dataset_path == "allenai/olmOCR-mix-0225", "Only supporting the olmocr-mix for now, later will support other training sets"
-    if subset == "00_documents" and split == "train_s2pdf":
-        parquet_files = [dest_path / "hugging_face" / "train-s2pdf.parquet"]
-    elif subset == "00_documents" and split == "eval_s2pdf":
-        parquet_files = [dest_path / "hugging_face" / "eval-s2pdf.parquet"]
-    elif subset == "01_books" and split == "train_iabooks":
-        parquet_files = [dest_path / "hugging_face" / "train-iabooks.parquet"]
-    elif subset == "01_books" and split == "eval_iabooks":
-        parquet_files = [dest_path / "hugging_face" / "eval-iabooks.parquet"]
+    if dataset_path == "allenai/olmOCR-mix-0225":
+        if subset == "00_documents" and split == "train_s2pdf":
+            parquet_files = [dest_path / "hugging_face" / "train-s2pdf.parquet"]
+        elif subset == "00_documents" and split == "eval_s2pdf":
+            parquet_files = [dest_path / "hugging_face" / "eval-s2pdf.parquet"]
+        elif subset == "01_books" and split == "train_iabooks":
+            parquet_files = [dest_path / "hugging_face" / "train-iabooks.parquet"]
+        elif subset == "01_books" and split == "eval_iabooks":
+            parquet_files = [dest_path / "hugging_face" / "eval-iabooks.parquet"]
+        else:
+            raise NotImplementedError()
     else:
-        raise NotImplementedError()
+        parquet_files = [dest_path / "hugging_face" / f"{subset}_{split}.parquet"]
 
     # Step 3: Extract PDF tarballs
     pdf_tarballs_dir = dest_path / "hugging_face" / "pdf_tarballs"
@@ -123,16 +224,12 @@ def prepare_olmocr_mix(dataset_path: str, subset: str, split: str, destination: 
 
             try:
 
-                # Extract fields from the row
-                # The rows in the parquet will look like url, page_number, response (json format), and id
-                response = row.get("response", "")
+                response = extract_response_from_row(row)
                 doc_id = str(idx)
 
                 assert len(doc_id) > 4
 
-                # Parse response if it's a JSON string
-                response_data = json.loads(response)
-                response = response_data
+                response_data = response
 
                 # Create folder structure using first 4 digits of id
                 # Make a folder structure, to prevent a huge amount of files in one folder, using the first 4 digits of the id, ex. id[:4]/id[4:].md
