@@ -20,6 +20,7 @@ from .katex.render import compare_rendered_equations, render_equation
 # Tell pytest these are not tests
 __test__ = False
 
+
 @dataclass
 class TableData:
     """Class to hold table data and metadata about headers."""

@@ -1,8 +1,8 @@
-import torch
 import base64
 import urllib.request
-
 from io import BytesIO
+
+import torch
 from PIL import Image
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
 
@@ -22,17 +22,16 @@ if __name__ == "__main__":
     # Render page 1 to an image
     image_base64 = render_pdf_to_base64png("./paper.pdf", 1, target_longest_image_dim=1288)
 
-
     # Build the full prompt
     messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": build_no_anchoring_v4_yaml_prompt()},
-                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_base64}"}},
-                    ],
-                }
-            ]
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": build_no_anchoring_v4_yaml_prompt()},
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_base64}"}},
+            ],
+        }
+    ]
 
     # Apply the chat template and processor
     text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
@@ -46,21 +45,18 @@ if __name__ == "__main__":
     )
     inputs = {key: value.to(device) for (key, value) in inputs.items()}
 
-
     # Generate the output
     output = model.generate(
-                **inputs,
-                temperature=0.1,
-                max_new_tokens=50,
-                num_return_sequences=1,
-                do_sample=True,
-            )
+        **inputs,
+        temperature=0.1,
+        max_new_tokens=50,
+        num_return_sequences=1,
+        do_sample=True,
+    )
 
     # Decode the output
     prompt_length = inputs["input_ids"].shape[1]
     new_tokens = output[:, prompt_length:]
-    text_output = processor.tokenizer.batch_decode(
-        new_tokens, skip_special_tokens=True
-    )
+    text_output = processor.tokenizer.batch_decode(new_tokens, skip_special_tokens=True)
 
     print(text_output)

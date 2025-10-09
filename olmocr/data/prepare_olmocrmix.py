@@ -1,7 +1,7 @@
 import argparse
 import json
-import tarfile
 import shutil
+import tarfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from os import PathLike
 from pathlib import Path
@@ -231,14 +231,32 @@ def prepare_olmocr_mix(dataset_path: str, subset: str, split: str, destination: 
 
                 response_data = response
 
-                # Create folder structure using first 4 digits of id
-                # Make a folder structure, to prevent a huge amount of files in one folder, using the first 4 digits of the id, ex. id[:4]/id[4:].md
-                folder_name = doc_id[:4]
-                file_name = f"{doc_id[4:]}.md"
+                # Create folder structure
+                # For allenai/olmOCR-mix-0225: use first 4 characters as folder
+                # For other datasets: preserve the existing structure
 
-                # Create directory
-                output_dir = processed_dir / folder_name
-                output_dir.mkdir(exist_ok=True)
+                if dataset_path == "allenai/olmOCR-mix-0225":
+                    # Standard format: use first 4 characters as folder
+                    folder_name = doc_id[:4]
+                    file_name = f"{doc_id[4:]}.md"
+
+                    # Create directory
+                    output_dir = processed_dir / folder_name
+                    output_dir.mkdir(exist_ok=True)
+                else:
+                    # Custom format: preserve directory structure from doc_id
+                    # The doc_id already contains the full path structure
+                    if "/" in doc_id:
+                        # doc_id contains path separators
+                        path_parts = doc_id.rsplit("/", 1)
+                        folder_path = Path(path_parts[0])
+                        file_name = f"{path_parts[1]}.md"
+                        output_dir = processed_dir / folder_path
+                        output_dir.mkdir(parents=True, exist_ok=True)
+                    else:
+                        # No path separator, put at root
+                        file_name = f"{doc_id}.md"
+                        output_dir = processed_dir
 
                 # Write markdown file with front matter and natural text
                 output_file = output_dir / file_name
@@ -268,7 +286,12 @@ def prepare_olmocr_mix(dataset_path: str, subset: str, split: str, destination: 
                 matched_pdf_path = extracted_pdfs_dir / f"{doc_id}.pdf"
                 assert matched_pdf_path.exists(), "Matching PDF not found"
 
-                symlink_path = output_dir / f"{doc_id[4:]}.pdf"
+                # Create symlink path based on dataset type
+                if dataset_path == "allenai/olmOCR-mix-0225":
+                    symlink_path = output_dir / f"{doc_id[4:]}.pdf"
+                else:
+                    # For custom datasets, use the same filename as the markdown
+                    symlink_path = output_file.with_suffix(".pdf")
 
                 # Create relative symlink to the PDF
                 if not symlink_path.exists():

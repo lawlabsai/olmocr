@@ -20,14 +20,19 @@ def test_repackage_and_prepare_olmocrmix():
 
         repackage_result = subprocess.run(
             [
-                "python", "olmocr/data/repackage_olmocrmix.py",
-                "--processed-dir", str(sample_dataset),
-                "--subset", "test_subset",
-                "--split", "test_split",
-                "--output-dir", str(packaged_dir)
+                "python",
+                "olmocr/data/repackage_olmocrmix.py",
+                "--processed-dir",
+                str(sample_dataset),
+                "--subset",
+                "test_subset",
+                "--split",
+                "test_split",
+                "--output-dir",
+                str(packaged_dir),
             ],
             capture_output=True,
-            text=True
+            text=True,
         )
 
         assert repackage_result.returncode == 0, f"Repackage script failed with stderr: {repackage_result.stderr}\nstdout: {repackage_result.stdout}"
@@ -36,20 +41,24 @@ def test_repackage_and_prepare_olmocrmix():
         parquet_file = packaged_dir / "test_subset_test_split.parquet"
         assert parquet_file.exists(), f"Expected parquet file not found: {parquet_file}"
 
-        
         # Step 2: Repackage the sample dataset into parquet + tarballs
         unpackaged_dir = temp_path / "unpackaged"
-     
+
         prepare_result = subprocess.run(
             [
-                "python", "olmocr/data/prepare_olmocrmix.py",
-                "--dataset-path", str(packaged_dir),
-                "--subset", "test_subset",
-                "--split", "test_split",
-                "--destination", str(unpackaged_dir)
+                "python",
+                "olmocr/data/prepare_olmocrmix.py",
+                "--dataset-path",
+                str(packaged_dir),
+                "--subset",
+                "test_subset",
+                "--split",
+                "test_split",
+                "--destination",
+                str(unpackaged_dir),
             ],
             capture_output=True,
-            text=True
+            text=True,
         )
 
         assert prepare_result.returncode == 0
@@ -62,11 +71,7 @@ def test_repackage_and_prepare_olmocrmix():
         assert unpacked_processed.exists(), f"Unpacked processed dir missing: {unpacked_processed}"
 
         def relative_files(root: Path):
-            return sorted(
-                path.relative_to(root)
-                for path in root.rglob("*")
-                if path.is_file()
-            )
+            return sorted(path.relative_to(root) for path in root.rglob("*") if path.is_file())
 
         sample_files = relative_files(sample_dataset)
         unpacked_files = relative_files(unpacked_processed)

@@ -20,13 +20,13 @@ from typing import Optional
 
 import boto3
 import pypdf
+from lingua import Language
 from openai import OpenAI
 from pydantic import BaseModel
 from tqdm import tqdm
 
 from olmocr.data.renderpdf import render_pdf_to_base64png
 from olmocr.filter import PdfFilter
-from lingua import Language
 
 TARGET_IMAGE_DIM = 1024
 

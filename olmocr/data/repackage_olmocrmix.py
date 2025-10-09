@@ -17,12 +17,13 @@ import tarfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional, Tuple
-from olmocr.prompts import PageResponse
-from olmocr.train.dataloader import FrontMatterParser
 
 import pandas as pd
 import yaml
 from tqdm import tqdm
+
+from olmocr.prompts import PageResponse
+from olmocr.train.dataloader import FrontMatterParser
 
 DEFAULT_MAX_TAR_BYTES = 1_073_741_824  # 1 GiB
 
@@ -46,19 +47,13 @@ class DocumentRecord:
     pdf_relpath: Optional[str] = None
 
 
-
-
-
 def infer_doc_id(md_path: Path, processed_root: Path) -> str:
     """Reconstruct the doc_id used in parquet/index space."""
     rel = md_path.relative_to(processed_root)
-    if len(rel.parts) < 2:
-        stem = rel.stem
-        prefix = rel.stem
-    else:
-        prefix = rel.parts[0]
-        stem = Path(rel.parts[-1]).stem
-    return f"{prefix}{stem}"
+
+    # Simply preserve the directory structure as the doc_id
+    # Convert path to doc_id by removing extension
+    return str(rel.with_suffix(""))
 
 
 def infer_pdf_path(md_path: Path, doc_id: str, pdf_root: Optional[Path]) -> Path:
@@ -249,9 +244,7 @@ def write_pdf_tarballs(
                 rec.chunk_name = tar_name
                 inner_ref = f"{tar_name}:{rec.doc_id}.pdf"
                 rec.pdf_relpath = f"{normalized_dir}/{inner_ref}" if normalized_dir else inner_ref
-                manifest_rows.append(
-                    {"doc_id": rec.doc_id, "chunk": tar_name, "arcname": f"{rec.doc_id}.pdf", "pdf_relpath": rec.pdf_relpath}
-                )
+                manifest_rows.append({"doc_id": rec.doc_id, "chunk": tar_name, "arcname": f"{rec.doc_id}.pdf", "pdf_relpath": rec.pdf_relpath})
 
         actual_size = tar_path.stat().st_size
         if actual_size > max_bytes:
