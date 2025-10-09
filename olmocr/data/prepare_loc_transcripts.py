@@ -9,12 +9,11 @@
 import argparse
 import csv
 import hashlib
-import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, Optional, Set, Tuple
 
 import img2pdf
 import requests

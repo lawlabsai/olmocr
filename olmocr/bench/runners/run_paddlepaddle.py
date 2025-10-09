@@ -1,6 +1,5 @@
 from threading import Lock
 
-import torch
 from paddleocr import PPStructureV3
 
 # Run's paddle paddle as in the docs here: https://huggingface.co/PaddlePaddle/PP-OCRv5_server_det

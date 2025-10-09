@@ -3,27 +3,23 @@ GRPO (Generative Reward-based Policy Optimization) training script for OlmOCR.
 """
 
 import argparse
-import asyncio
 import base64
 import glob
 import json
 import logging
 import os
-import random
 import sys
 from concurrent.futures import ThreadPoolExecutor
-from functools import lru_cache, partial
+from functools import lru_cache
 from io import BytesIO
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-import numpy as np
 import torch
 import torch.distributed as dist
 import wandb
 from PIL import Image
 from rapidfuzz import fuzz
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import Dataset
 from transformers import (
     AutoProcessor,
     Qwen2_5_VLForConditionalGeneration,

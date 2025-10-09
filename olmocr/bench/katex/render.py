@@ -22,7 +22,6 @@ import threading
 import unittest
 import weakref
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import List, Optional
 

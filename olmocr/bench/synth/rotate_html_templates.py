@@ -13,17 +13,12 @@ The script:
 """
 
 import argparse
-import json
 import os
 import random
-import re
 import shutil
-import subprocess
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional
 
 import pypdf
-from pypdf import PageObject, Transformation
 from tqdm import tqdm
 
 

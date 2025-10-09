@@ -16,10 +16,9 @@ import json
 import tarfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Tuple
+from typing import Dict, Iterator, List, Optional
 
 import pandas as pd
-import yaml
 from tqdm import tqdm
 
 from olmocr.prompts import PageResponse

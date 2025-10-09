@@ -16,7 +16,6 @@ import argparse
 import json
 import os
 import random
-import shutil
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
