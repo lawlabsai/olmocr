@@ -74,7 +74,20 @@ def normalize_response_payload(front_matter: Dict[str, object], body_text: str) 
     payload = dict(front_matter)
     text = body_text if body_text and body_text.strip() else None
 
-    payload.setdefault("primary_language", None)
+    # Handle primary_language field - convert booleans to None
+    if "primary_language" in payload:
+        val = payload["primary_language"]
+        if isinstance(val, bool):
+            # Convert boolean to None (no language detected)
+            print(f"[DEBUG] Converting boolean primary_language value '{val}' to None")
+            payload["primary_language"] = None
+        elif not isinstance(val, (str, type(None))):
+            # Convert other types to string or None
+            print(f"[DEBUG] Converting unexpected primary_language type {type(val)} value '{val}' to string/None")
+            payload["primary_language"] = str(val) if val else None
+    else:
+        payload["primary_language"] = None
+
     payload.setdefault("is_rotation_valid", True)
     payload.setdefault("rotation_correction", 0)
     payload.setdefault("is_table", False)
@@ -264,7 +277,7 @@ def write_pdf_tarballs(
 
     normalized_dir = chunk_dir_name.strip().strip("/") if chunk_dir_name else ""
 
-    for chunk_idx, batch in enumerate(batches):
+    for chunk_idx, batch in tqdm(enumerate(batches), desc="Writing PDF tarballs"):
         tar_name = f"{chunk_prefix}_{chunk_idx:05d}.tar.gz"
         tar_path = pdf_dir / tar_name
         with tarfile.open(tar_path, "w:gz", dereference=True) as tar:
