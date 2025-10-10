@@ -83,6 +83,22 @@ def normalize_response_payload(front_matter: Dict[str, object], body_text: str) 
     return payload
 
 
+def load_url_mappings(processed_dir: Path) -> Dict[str, str]:
+    """Load URL mappings from urls.jsonl if it exists."""
+    urls_file = processed_dir / "urls.jsonl"
+    url_map = {}
+
+    if urls_file.exists():
+        print(f"Loading URL mappings from {urls_file}")
+        with open(urls_file, "r", encoding="utf-8") as f:
+            for line in f:
+                entry = json.loads(line.strip())
+                url_map[entry["id"]] = entry["url"]
+        print(f"Loaded {len(url_map)} URL mappings")
+
+    return url_map
+
+
 def guess_url(front_matter: Dict[str, object], doc_id: str, source_url_template: Optional[str]) -> Optional[str]:
     # TODO, we will have to add some better support for this
     return None
@@ -124,6 +140,9 @@ def collect_documents(
         "natural_text",
     }
 
+    # Load URL mappings from urls.jsonl if it exists
+    url_map = load_url_mappings(processed_dir)
+
     parser = FrontMatterParser(front_matter_class=PageResponse)
 
     for md_path in tqdm(md_files, desc="Scanning markdown files"):
@@ -135,7 +154,18 @@ def collect_documents(
             response_payload = normalize_response_payload(front_matter, body_text)
             pdf_size = pdf_path.stat().st_size
             page_number = parse_page_number(doc_id, front_matter)
-            url = guess_url(front_matter, doc_id, url_template)
+
+            # Try to get URL from the loaded url_map
+            # Handle both formats: "0001/234567" and "0001234567"
+            url = url_map.get(doc_id)
+            if not url and "/" in doc_id:
+                # Try combining the parts (e.g., "0001/234567" -> "0001234567")
+                combined_id = doc_id.replace("/", "")
+                url = url_map.get(combined_id)
+            if not url:
+                # Fall back to guess_url if URL not found in map
+                url = guess_url(front_matter, doc_id, url_template)
+
             extras = {k: v for k, v in response_payload.items() if k not in canonical_keys}
             extras_json = json.dumps(extras, ensure_ascii=False) if extras else None
 

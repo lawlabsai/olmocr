@@ -78,6 +78,17 @@ def test_repackage_and_prepare_olmocrmix():
         assert sample_files == unpacked_files, "Mismatch in files between sample dataset and unpacked output"
 
         for relative_path in sample_files:
-            sample_contents = (sample_dataset / relative_path).read_bytes()
-            unpacked_contents = (unpacked_processed / relative_path).read_bytes()
-            assert sample_contents == unpacked_contents, f"File contents differ for {relative_path}"
+            sample_file = sample_dataset / relative_path
+            unpacked_file = unpacked_processed / relative_path
+
+            if relative_path.suffix == ".jsonl":
+                # For JSONL files, compare as sets of lines (order doesn't matter)
+                # Filter out empty lines
+                sample_lines = set(line for line in sample_file.read_text().strip().split('\n') if line.strip())
+                unpacked_lines = set(line for line in unpacked_file.read_text().strip().split('\n') if line.strip())
+                assert sample_lines == unpacked_lines, f"JSONL file contents differ for {relative_path}"
+            else:
+                # For other files, compare as bytes
+                sample_contents = sample_file.read_bytes()
+                unpacked_contents = unpacked_file.read_bytes()
+                assert sample_contents == unpacked_contents, f"File contents differ for {relative_path}"

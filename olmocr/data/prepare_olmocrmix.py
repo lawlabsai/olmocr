@@ -213,6 +213,10 @@ def prepare_olmocr_mix(dataset_path: str, subset: str, split: str, destination: 
     total_processed = 0
     total_errors = 0
 
+    # Create urls.jsonl file for id-to-url mappings
+    urls_file_path = processed_dir / "urls.jsonl"
+    urls_file = open(urls_file_path, "w", encoding="utf-8")
+
     for parquet_file in parquet_files:
         print(f"Processing {parquet_file.name}...")
         df = pd.read_parquet(parquet_file)
@@ -228,6 +232,12 @@ def prepare_olmocr_mix(dataset_path: str, subset: str, split: str, destination: 
                 doc_id = str(idx)
 
                 assert len(doc_id) > 4
+
+                # Extract URL from row and write to urls.jsonl
+                url = row.get("url", None)
+                if url:
+                    url_entry = {"id": doc_id, "url": url}
+                    urls_file.write(json.dumps(url_entry) + "\n")
 
                 # Create folder structure
                 # For allenai/olmOCR-mix-0225: use first 4 characters as folder
@@ -304,6 +314,10 @@ def prepare_olmocr_mix(dataset_path: str, subset: str, split: str, destination: 
 
         if max_examples and total_processed >= max_examples:
             break
+
+    # Close the urls.jsonl file
+    urls_file.close()
+    print(f"Created urls.jsonl with {total_processed} id-to-url mappings")
 
     print(f"Completed! Processed {total_processed} examples to {processed_dir}")
     print(f"Total errors: {total_errors}")
