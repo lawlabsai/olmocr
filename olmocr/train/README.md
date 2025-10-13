@@ -1,6 +1,6 @@
 # olmOCR Training Guide
 
-This guide provides comprehensive instructions for training olmOCR models, including what you need to reproduce https://huggingface.co/allenai/olmOCR-7B-0725-FP8 on your own hardware.
+This guide provides comprehensive instructions for training olmOCR models, including what you need to reproduce https://huggingface.co/allenai/olmOCR-7B-1025-FP8 on your own hardware.
 
 ## Environment setup
 
@@ -47,14 +47,24 @@ Document text goes here...
 ```
 
 The easiest way to grab a lot of files in this format is to use `prepare_olmocrmix.py` which will automatically download and prepare 
-[olmOCR-mix-0225](https://huggingface.co/datasets/allenai/olmOCR-mix-0225) for your environment.
+[olmOCR-mix-1025](https://huggingface.co/datasets/allenai/olmOCR-mix-1025) for your environment.
 
 ```bash
 # Caution, requires ~200GB of disk space
-python olmocr/train/prepare_olmocrmix.py --subset 01_books --split eval_iabooks --destination ~/olmOCR-mix-0225/
-python olmocr/train/prepare_olmocrmix.py --subset 01_books --split train_iabooks --destination ~/olmOCR-mix-0225/
-python olmocr/train/prepare_olmocrmix.py --subset 00_documents --split eval_s2pdf --destination ~/olmOCR-mix-0225/
-python olmocr/train/prepare_olmocrmix.py --subset 00_documents --split train_s2pdf --destination ~/olmOCR-mix-0225/
+
+# You can pick a specific split and subset to download, or just run all these commands in order to get everything
+python -m olmocr.data.prepare_olmocrmix --dataset-path allenai/olmOCR-mix-1025 --destination ~/olmOCR-mix-1025-extracted --subset 00_documents --split train                       
+python -m olmocr.data.prepare_olmocrmix --dataset-path allenai/olmOCR-mix-1025 --destination ~/olmOCR-mix-1025-extracted --subset 00_documents --split eval
+
+python -m olmocr.data.prepare_olmocrmix --dataset-path allenai/olmOCR-mix-1025 --destination ~/olmOCR-mix-1025-extracted --subset 01_books --split train                       
+python -m olmocr.data.prepare_olmocrmix --dataset-path allenai/olmOCR-mix-1025 --destination ~/olmOCR-mix-1025-extracted --subset 01_books --split eval
+
+python -m olmocr.data.prepare_olmocrmix --dataset-path allenai/olmOCR-mix-1025 --destination ~/olmOCR-mix-1025-extracted --subset 02_loc_transcripts --split train                       
+python -m olmocr.data.prepare_olmocrmix --dataset-path allenai/olmOCR-mix-1025 --destination ~/olmOCR-mix-1025-extracted --subset 02_loc_transcripts --split eval
+
+python -m olmocr.data.prepare_olmocrmix --dataset-path allenai/olmOCR-mix-1025 --destination ~/olmOCR-mix-1025-extracted --subset 03_national_archives --split train                       
+python -m olmocr.data.prepare_olmocrmix --dataset-path allenai/olmOCR-mix-1025 --destination ~/olmOCR-mix-1025-extracted --subset 03_national_archives --split eval
+
 ```
 
 ### Setup your config
@@ -68,12 +78,12 @@ python olmocr/train/prepare_olmocrmix.py --subset 00_documents --split train_s2p
 
 This is setup to train on a single B200 GPU, and training will take around 24-48 hours (~$300 if renting). 
 
-But this is training for ~250,000 pages per epoch, so it's quite a big endeavour. We hope to add more options to make further finetuning your own small model more simple and easy.
+But this is training for ~270,000 pages per epoch, so it's quite a big endeavour. We hope to add more options to make further finetuning your own small model more simple and easy.
 
 ### Launch training
 
 ```bash
-python -m olmocr.train.train --config olmcr/train/configs/qwen25_vl_olmocrv2_2epoch.yaml
+python -m olmocr.train.train --config olmocr/train/configs/v0.4.0/qwen25_vl_olmocrv4_rotation_1epoch_mix_1025_filtered.yaml
 ```
 
 ### Prepare Checkpoints and Quantize
@@ -82,7 +92,7 @@ After training is done, you will need to call `prepare_checkpoint.py` to take th
 and get them ready for use with VLLM.
 
 ```bash
-python -m olmocr.train.prepare_olmocr_checkpoint [source dir]/checkpoint-7648 [destination]
+python -m olmocr.train.prepare_olmocr_checkpoint [source dir]/checkpoint-xxxx [destination]
 ```
 
 And finally, we recommend doing an FP8 quantization step, whose performance is solidly in the error bars of the raw

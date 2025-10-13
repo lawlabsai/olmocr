@@ -332,13 +332,13 @@ huggingface-cli download --repo-type dataset --resume-download allenai/olmOCR-be
 Convert your documents
 ```bash
 # You will need to install the [gpu] subset of olmocr dependencies to run gpu inference
+# Then convert using using olmocr.bench.convert, see the olmocr/bench/runners directory for options
 pip install olmocr[gpu] --find-links https://flashinfer.ai/whl/cu124/torch2.4/flashinfer/
-
-# convert using the same engine as olmOCR pipeline.py uses, see the olmocr/bench/runners directory for options
 python -m olmocr.bench.convert olmocr_pipeline --dir ./olmOCR-bench/bench_data
 
-# or use convert_all.sh to run OCR with many common frameworks all at once, API keys will be required
-./olmocr/bench/scripts/convert_all.sh
+# OR, you can use the pipeline to convert the benchmark PDFs and move them into the final format
+python -m olmocr.pipeline ./localworkspace --markdown --pdfs ./olmOCR-bench/bench_data/pdfs/**/*.pdf 
+python olmocr/bench/scripts/workspace_to_bench.py localworkspace/ olmOCR-bench/bench_data/olmocr --bench-path ./olmOCR-bench/
 ```
 
 Now run the benchmark
