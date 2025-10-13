@@ -16,8 +16,26 @@ def extract_tarball(tarball_path: Path, extract_dir: Path) -> int:
     """Extract a single tarball and return the number of files extracted."""
     try:
         with tarfile.open(tarball_path, "r") as tar:
-            tar.extractall(extract_dir)
-            return len(tar.getmembers())
+            # Extract with overwrite for existing files
+            members = tar.getmembers()
+            for member in members:
+                try:
+                    tar.extract(member, extract_dir)
+                except (OSError, IOError) as e:
+                    # If extraction fails due to existing file, try to remove and re-extract
+                    target_path = extract_dir / member.name
+                    if target_path.exists():
+                        if target_path.is_dir():
+                            # Skip existing directories
+                            continue
+                        else:
+                            # Remove existing file and re-extract
+                            target_path.unlink()
+                            tar.extract(member, extract_dir)
+                    else:
+                        # Re-raise if it's not a file exists issue
+                        raise e
+            return len(members)
     except Exception as e:
         print(f"Error extracting {tarball_path}: {e}")
         return 0
