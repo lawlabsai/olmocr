@@ -1,5 +1,7 @@
 import argparse
 import asyncio
+import base64
+import tempfile
 import glob
 import hashlib
 import json
@@ -342,7 +344,7 @@ async def generate_html_from_image(client, image_base64):
         # Step 1: Initial analysis and column detection
         analysis_response = await client.messages.create(
             model="claude-sonnet-4-5-20250929",
-            max_tokens=2000,
+            max_tokens=4000,
             temperature=0.1,
             messages=[
                 {
@@ -363,6 +365,11 @@ async def generate_html_from_image(client, image_base64):
             ],
         )
 
+        # Check if response was complete
+        if hasattr(analysis_response, 'stop_reason') and analysis_response.stop_reason != 'end_turn':
+            print(f"Warning: Analysis response incomplete (stop_reason: {analysis_response.stop_reason})")
+            return None
+
         analysis_text = ""
         for content in analysis_response.content:
             if content.type == "text":
@@ -376,7 +383,7 @@ async def generate_html_from_image(client, image_base64):
         # Step 2: Initial HTML generation with detailed layout instructions
         initial_response = await client.messages.create(
             model="claude-sonnet-4-5-20250929",
-            max_tokens=6000,
+            max_tokens=12000,
             temperature=0.2,
             messages=[
                 {
@@ -403,18 +410,115 @@ async def generate_html_from_image(client, image_base64):
             ],
         )
 
+        # Check if response was complete
+        if hasattr(initial_response, 'stop_reason') and initial_response.stop_reason != 'end_turn':
+            print(f"Warning: Initial HTML response incomplete (stop_reason: {initial_response.stop_reason})")
+            return None
+
         # Extract initial HTML
-        initial_html = ""
+        initial_html_text = ""
         for content in initial_response.content:
             if content.type == "text":
-                initial_html += content.text
+                initial_html_text += content.text
 
         # Track token usage from second API call
         if hasattr(initial_response, "usage"):
             total_input_tokens += initial_response.usage.input_tokens
             total_output_tokens += initial_response.usage.output_tokens
 
-        return extract_code_block(initial_html)
+        initial_html = extract_code_block(initial_html_text)
+        if not initial_html:
+            print("Warning: No HTML code block found in initial response")
+            return None
+
+        # Step 3: Render the initial HTML to PDF and then back to PNG for comparison
+
+        # Create a temporary PDF file
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_pdf:
+            tmp_pdf_path = tmp_pdf.name
+
+        try:
+            # Render HTML to PDF using existing function
+            render_success = await render_pdf_with_playwright(initial_html, tmp_pdf_path, png_width, png_height)
+
+            if not render_success:
+                print("Warning: Failed to render initial HTML to PDF for refinement")
+                # Fall back to returning the initial HTML without refinement
+                return initial_html
+
+            # Convert PDF back to PNG
+            rendered_image_base64 = render_pdf_to_base64png(tmp_pdf_path, 1, max(png_width, png_height))
+
+            if not rendered_image_base64:
+                print("Warning: Failed to convert rendered PDF to PNG for refinement")
+                # Fall back to returning the initial HTML without refinement
+                return initial_html
+
+            # Step 4: Refinement - Show both images to Claude and ask for corrections
+            refinement_response = await client.messages.create(
+                model="claude-sonnet-4-5-20250929",
+                max_tokens=12000,
+                temperature=0.1,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "I'm going to show you two images:\n1. The original document\n2. How the HTML I generated renders\n\nPlease compare them carefully and provide a revised version of the HTML that better matches the original."},
+                            {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": image_base64}},
+                            {"type": "text", "text": "Above is the ORIGINAL document."},
+                            {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": rendered_image_base64}},
+                            {"type": "text", "text": "Above is how my HTML currently renders."},
+                            {
+                                "type": "text",
+                                "text": f"Here is the current HTML code:\n\n```html\n{initial_html}\n```\n\n"
+                                "Please analyze the differences between the original document and the rendered version. Focus on:\n"
+                                "1. Layout issues - are columns preserved correctly?\n"
+                                "2. Positioning - are elements in the right place?\n"
+                                "3. Spacing - are margins, padding, and spacing between elements correct?\n"
+                                "4. Occlusion - is any important content hidden or overlapping?\n"
+                                "5. Text formatting - are fonts, sizes, and styles appropriate?\n"
+                                f"The webpage will be viewed at {png_width}x{png_height} pixels.\n\n"
+                                "Provide a REVISED version of the HTML that corrects any issues you identified. "
+                                "Make sure all important elements are visible and the layout matches the original as closely as possible.\n"
+                                "Output the complete revised HTML in a ```html code block."
+                            },
+                        ],
+                    }
+                ],
+            )
+
+            # Check if refinement response was complete
+            if hasattr(refinement_response, 'stop_reason') and refinement_response.stop_reason != 'end_turn':
+                print(f"Warning: Refinement response incomplete (stop_reason: {refinement_response.stop_reason})")
+                # Return initial HTML as fallback since it was complete
+                return initial_html
+
+            # Extract refined HTML
+            refined_html_text = ""
+            for content in refinement_response.content:
+                if content.type == "text":
+                    refined_html_text += content.text
+
+            # Track token usage from refinement API call
+            if hasattr(refinement_response, "usage"):
+                total_input_tokens += refinement_response.usage.input_tokens
+                total_output_tokens += refinement_response.usage.output_tokens
+
+            refined_html = extract_code_block(refined_html_text)
+
+            # Return refined HTML if available, otherwise return initial HTML
+            if refined_html:
+                print("Successfully refined HTML using visual comparison")
+                return refined_html
+            else:
+                print("Warning: No HTML code block found in refinement response, using initial HTML")
+                return initial_html
+
+        finally:
+            # Clean up temporary PDF file
+            if os.path.exists(tmp_pdf_path):
+                os.remove(tmp_pdf_path)
+
     except Exception as e:
         print(f"Error calling Claude API: {e}")
         return None
