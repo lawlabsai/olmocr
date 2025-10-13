@@ -49,6 +49,18 @@ to run it against your own OCR tools. Your tool just needs to support Markdown o
       <td align="center">48.3 ± 1.1</td>
     </tr>
     <tr>
+      <td align="left">Marker v1.10.1 (base, force_ocr)</td>
+      <td align="center"><strong>83.8</strong></td>
+      <td align="center">66.8</td>
+      <td align="center">72.9</td>
+      <td align="center">33.5</td>
+      <td align="center">86.6</td>
+      <td align="center">80.0</td>
+      <td align="center"><strong>85.7</strong></td>
+      <td align="center">99.3</td>
+      <td align="center">76.1 ± 1.1</td>
+    </tr>
+    <!-- <tr>
       <td align="left">Marker v1.7.5 (base, force_ocr)</td>
       <td align="center">76.0</td>
       <td align="center">57.9</td>
@@ -59,7 +71,7 @@ to run it against your own OCR tools. Your tool just needs to support Markdown o
       <td align="center"><strong>84.6</strong></td>
       <td align="center">99.1</td>
       <td align="center">70.1 ± 1.1</td>
-    </tr>
+    </tr> -->
     <tr>
       <td align="left">MinerU v1.3.10</td>
       <td align="center">75.4</td>
@@ -218,7 +230,7 @@ to run it against your own OCR tools. Your tool just needs to support Markdown o
     </tr>   
     <tr>
       <td align="left">olmOCR pipeline v0.4.0</td>
-      <td align="center"><strong>83.0</strong></td>
+      <td align="center">83.0</td>
       <td align="center"><strong>82.3</strong></td>
       <td align="center"><strong>84.9</strong></td>
       <td align="center"><strong>47.7</strong></td>
