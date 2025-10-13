@@ -60,8 +60,10 @@ python olmocr/train/prepare_olmocrmix.py --subset 00_documents --split train_s2p
 ### Setup your config
 
 [olmOCR-7B-0725-FP8](https://huggingface.co/allenai/olmOCR-7B-0725-FP8) was trained with [qwen25_vl_olmocrv2_2epoch.yaml](/olmcr/train/configs/v0.2.0/qwen25_vl_olmocrv2_2epoch.yaml)
-[olmOCR-7B-0825-FP8](https://huggingface.co/allenai/olmOCR-7B-0825-FP8) was trained with [qwen25_vl_olmocrv3_rotation_1epoch.yaml](/olmcr/train/configs/v0.3.0/qwen25_vl_olmocrv3_rotation_1epoch.yaml)
-[olmOCR-7B-1025-FP8](https://huggingface.co/allenai/olmOCR-7B-1025-FP8) was trained with [qwen25_vl_olmocrv4_rotation_1epoch_mix_1025_filtered.yaml](/olmcr/train/configs/v0.4.0/qwen25_vl_olmocrv4_rotation_1epoch_mix_1025_filtered.yaml)
+
+[olmOCR-7B-0825-FP8](https://huggingface.co/allenai/olmOCR-7B-0825-FP8) was trained with [qwen25_vl_olmocrv3_rotation_1epoch.yaml](/olmocr/train/configs/v0.3.0/qwen25_vl_olmocrv3_rotation_1epoch.yaml)
+
+[olmOCR-7B-1025-FP8](https://huggingface.co/allenai/olmOCR-7B-1025-FP8) was trained with [qwen25_vl_olmocrv4_rotation_1epoch_mix_1025_filtered.yaml](/olmocr/train/configs/v0.4.0/qwen25_vl_olmocrv4_rotation_1epoch_mix_1025_filtered.yaml)
 
 
 This is setup to train on a single B200 GPU, and training will take around 24-48 hours (~$300 if renting). 
