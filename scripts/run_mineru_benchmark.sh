@@ -75,6 +75,7 @@ fi
 # Create Python script to run beaker experiment
 cat << 'EOF' > /tmp/run_benchmark_experiment.py
 import sys
+from textwrap import dedent
 from beaker import Beaker, ExperimentSpec, TaskSpec, TaskContext, ResultSpec, TaskResources, ImageSource, Priority, Constraints, EnvVar
 
 # Get image tag, beaker user, git branch, git hash, and mineru version from command line
@@ -107,61 +108,65 @@ else:
     mineru_install_cmd = f'pip install --upgrade "mineru[core]=={mineru_version}"'
     mineru_version_label = mineru_version
 
-setup_mineru_script = """cat <<'PY' > /tmp/run_mineru_cli.py
-import shutil
-import subprocess
-from pathlib import Path
+run_mineru_shell = dedent("""\
+bash -lc 'set -euo pipefail
+PDF_ROOT="olmOCR-bench/bench_data/pdfs"
+TARGET_ROOT="olmOCR-bench/bench_data/mineru"
+rm -rf "$TARGET_ROOT"
+mkdir -p "$TARGET_ROOT"
 
-PDF_ROOT = Path("olmOCR-bench/bench_data/pdfs")
-TARGET_ROOT = Path("olmOCR-bench/bench_data/mineru")
+echo "Running MinerU conversions..."
+for folder in "$PDF_ROOT"/*; do
+    if [ ! -d "$folder" ]; then
+        continue
+    fi
+    section=$(basename "$folder")
+    output_dir="$HOME/mineru_bench_${section}"
+    rm -rf "$output_dir"
+    echo "  Processing $folder"
+    mineru -p "$folder" -o "$output_dir"
+done
 
-def find_markdown(source_root, pdf_stem):
-    candidates = sorted(source_root.glob(f"**/{pdf_stem}.md"))
-    if not candidates:
-        raise FileNotFoundError(f"No markdown output found for {pdf_stem}")
-    for path in candidates:
-        if "auto" in path.parts:
-            return path
-    return candidates[0]
-
-def main():
-    if not PDF_ROOT.exists():
-        raise FileNotFoundError(f"PDF root {PDF_ROOT} does not exist")
-
-    if TARGET_ROOT.exists():
-        shutil.rmtree(TARGET_ROOT)
-
-    for folder in sorted([p for p in PDF_ROOT.iterdir() if p.is_dir()]):
-        output_dir = Path.home() / f"mineru_bench_{folder.name}"
-        if output_dir.exists():
-            shutil.rmtree(output_dir)
-
-        print(f"Running MinerU on {folder}", flush=True)
-        subprocess.run(
-            ["mineru", "-p", str(folder), "-o", str(output_dir)],
-            check=True,
-        )
-
-        pdf_paths = sorted(folder.rglob("*.pdf"))
-        if not pdf_paths:
-            print(f"No PDFs found in {folder}, skipping")
+echo "Collecting MinerU markdown outputs..."
+find "$PDF_ROOT" -type f -name "*.pdf" | while IFS= read -r pdf_path; do
+    rel_path=${pdf_path#"$PDF_ROOT"/}
+    case "$rel_path" in
+        */*)
+            section=${rel_path%%/*}
+            ;;
+        *)
+            echo "Warning: Unexpected PDF path layout for $pdf_path, skipping" >&2
             continue
+            ;;
+    esac
 
-        for pdf_path in pdf_paths:
-            pdf_stem = pdf_path.stem
-            markdown_path = find_markdown(output_dir, pdf_stem)
+    output_dir="$HOME/mineru_bench_${section}"
+    pdf_stem=$(basename "$pdf_path" .pdf)
+    rel_dir=$(dirname "$rel_path")
+    if [ "$rel_dir" = "." ]; then
+        rel_dir=""
+    fi
 
-            relative_parent = pdf_path.parent.relative_to(PDF_ROOT)
-            destination_dir = TARGET_ROOT / relative_parent
-            destination_dir.mkdir(parents=True, exist_ok=True)
+    primary_md=$(find "$output_dir" -path "*/auto/${pdf_stem}.md" -print -quit)
+    if [ -z "$primary_md" ]; then
+        primary_md=$(find "$output_dir" -name "${pdf_stem}.md" -print -quit)
+    fi
 
-            destination_path = destination_dir / f"{pdf_stem}_pg1_repeat1.md"
-            shutil.copyfile(markdown_path, destination_path)
-            print(f"Wrote {destination_path}", flush=True)
+    if [ -z "$primary_md" ]; then
+        echo "Warning: no markdown output for $pdf_path" >&2
+        continue
+    fi
 
-if __name__ == "__main__":
-    main()
-PY"""
+    dest_dir="$TARGET_ROOT"
+    if [ -n "$rel_dir" ]; then
+        dest_dir="$TARGET_ROOT/$rel_dir"
+    fi
+    mkdir -p "$dest_dir"
+    dest_path="$dest_dir/${pdf_stem}_pg1_repeat1.md"
+    cp "$primary_md" "$dest_path"
+    echo "  Copied $primary_md -> $dest_path"
+done
+'""")
 
 # First experiment: Original benchmark job
 commands = []
@@ -175,9 +180,7 @@ commands.extend([
     "cd olmOCR-bench && git lfs pull && cd ..",
     "pip install --upgrade pip",
     mineru_install_cmd,
-    setup_mineru_script,
-    "python /tmp/run_mineru_cli.py",
-    "rm /tmp/run_mineru_cli.py",
+    run_mineru_shell,
     "python -m olmocr.bench.benchmark --dir ./olmOCR-bench/bench_data --candidate mineru"
 ])
 
