@@ -18,7 +18,7 @@ import torch
 import torch.distributed as dist
 import wandb
 from PIL import Image
-from rapidfuzz import fuzz, distance
+from rapidfuzz import distance, fuzz
 from torch.utils.data import Dataset
 from transformers import (
     AutoProcessor,
