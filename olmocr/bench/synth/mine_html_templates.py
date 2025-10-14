@@ -34,6 +34,22 @@ total_input_tokens = 0
 total_output_tokens = 0
 
 
+def get_git_commit_hash():
+    """Get the current git commit hash, if available."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True
+        )
+        return result.stdout.strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        # Git not available or not a git repository
+        return None
+
+
 # Unicode mappings for superscript characters
 SUPERSCRIPT_MAP = {
     "0": "⁰",
@@ -341,6 +357,50 @@ async def generate_html_from_image(client, image_base64):
     png_width, png_height = get_png_dimensions_from_base64(image_base64)
 
     try:
+        # Step 0: Check that the orientation of the original document is right-side-up. If not, we will
+        # skip this page, to keep the code simple
+        orientation_response = await client.messages.create(
+            model="claude-sonnet-4-5-20250929",
+            max_tokens=1000,
+            temperature=0,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": image_base64}},
+                        {
+                            "type": "text",
+                            "text": "Please analyze this document image and determine its orientation.\n\n"
+                            "Is this document right-side-up (correctly oriented), or is it rotated?\n\n"
+                            "Respond with ONLY one of the following:\n"
+                            "- RIGHT_SIDE_UP: The document is correctly oriented and readable\n"
+                            "- ROTATED_90: The document is rotated 90 degrees clockwise\n"
+                            "- ROTATED_180: The document is upside down (rotated 180 degrees)\n"
+                            "- ROTATED_270: The document is rotated 270 degrees clockwise (90 degrees counter-clockwise)\n"
+                            "- UNCLEAR: Cannot determine orientation (e.g., blank page, purely graphical content)\n\n"
+                            "Important: Only respond with one of these exact terms, nothing else.",
+                        },
+                    ],
+                }
+            ],
+        )
+
+        # Extract orientation from response
+        orientation_text = ""
+        for content in orientation_response.content:
+            if content.type == "text":
+                orientation_text += content.text.strip()
+
+        # Track token usage from orientation check
+        if hasattr(orientation_response, "usage"):
+            total_input_tokens += orientation_response.usage.input_tokens
+            total_output_tokens += orientation_response.usage.output_tokens
+
+        # Check orientation result
+        if orientation_text not in ["RIGHT_SIDE_UP"]:
+            print(f"Skipping page due to orientation: {orientation_text}")
+            return None
+
         # Step 1: Initial analysis and column detection
         analysis_response = await client.messages.create(
             model="claude-sonnet-4-5-20250929",
@@ -431,8 +491,8 @@ async def generate_html_from_image(client, image_base64):
             print("Warning: No HTML code block found in initial response")
             return None
 
-        # Step 3: Render the initial HTML to PDF and then back to PNG for comparison
 
+        # Step 3: Render the initial HTML to PDF and then back to PNG for comparison
         # Create a temporary PDF file
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_pdf:
             tmp_pdf_path = tmp_pdf.name
@@ -1214,6 +1274,22 @@ async def process_pdf(pdf_info, args, client, pdf_filter=None):
         if not html_content:
             print(f"Failed to generate HTML for {pdf_path}, page {page_num}")
             return None
+        
+        # Add git commit meta tag if available
+        git_commit = get_git_commit_hash()
+        if git_commit:
+            # Parse the HTML to add the meta tag in the head section
+            html_soup = BeautifulSoup(html_content, "html.parser")
+
+            # Only add meta tag if head element exists
+            head = html_soup.find("head")
+            if head:
+                # Add meta tag with git commit
+                meta_tag = html_soup.new_tag("meta", attrs={"name": "olmocr_git_commit", "content": git_commit})
+                head.insert(0, meta_tag)
+
+                # Update initial_html with the modified version
+                html_content = str(html_soup)
 
         # Create output directories
         html_dir = os.path.join(args.output_dir, "html", args.name)
