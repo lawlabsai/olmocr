@@ -89,6 +89,7 @@ bench = [
     "syntok",
     "openai",
     "google-genai",
+    "anthropic",
     "playwright",
     "mistralai",
     "lxml",
