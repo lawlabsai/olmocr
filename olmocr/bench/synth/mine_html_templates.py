@@ -372,6 +372,7 @@ async def generate_html_from_image(client, image_base64):
                             "type": "text",
                             "text": "Please analyze this document image and determine its orientation.\n\n"
                             "Is this document right-side-up (correctly oriented), or is it rotated?\n\n"
+                            "Make your decision based on the main document contents that takes up most of the page area.\n\n"
                             "Respond with ONLY one of the following:\n"
                             "- RIGHT_SIDE_UP: The document is correctly oriented and readable\n"
                             "- ROTATED_90: The document is rotated 90 degrees clockwise\n"
