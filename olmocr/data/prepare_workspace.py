@@ -102,7 +102,19 @@ def parse_jsonl_entry(entry: Dict) -> Optional[Dict]:
             logger.warning(f"Entry for {source_file} missing pdf_page_numbers")
             return None
 
-        return {"id": entry.get("id", ""), "text": text, "source_file": source_file, "metadata": metadata, "pdf_page_numbers": pdf_page_numbers}
+        # Extract PAGE_RESPONSE_COLUMNS data from attributes
+        page_response_data = {}
+        for column in PAGE_RESPONSE_COLUMNS:
+            page_response_data[column] = attributes.get(column, [])
+
+        return {
+            "id": entry.get("id", ""),
+            "text": text,
+            "source_file": source_file,
+            "metadata": metadata,
+            "pdf_page_numbers": pdf_page_numbers,
+            "page_response_data": page_response_data
+        }
     except Exception as e:
         logger.error(f"Error parsing JSONL entry: {e}")
         return None
@@ -178,6 +190,7 @@ def process_document(entry_data: Dict, output_dir: Path, cache_dir: Path) -> Tup
     doc_id = entry_data["id"]
     full_text = entry_data["text"]
     pdf_page_numbers = entry_data["pdf_page_numbers"]
+    page_response_data = entry_data.get("page_response_data", {})
 
     # Extract page texts
     page_texts = extract_page_text(full_text, pdf_page_numbers)
@@ -210,9 +223,17 @@ def process_document(entry_data: Dict, output_dir: Path, cache_dir: Path) -> Tup
 
     doc_dir.mkdir(parents=True, exist_ok=True)
 
+    # Create a mapping from page numbers to their indices
+    page_num_to_index = {}
+    for idx, (_, _, page_num) in enumerate(pdf_page_numbers):
+        page_num_to_index[page_num] = idx
+
     # Process each page
     for page_num, page_text in page_texts.items():
         try:
+            # Get the index for this page number
+            page_index = page_num_to_index.get(page_num)
+
             # Create filenames
             base_name = f"{doc_id}_page{page_num}"
             md_path = doc_dir / f"{base_name}.md"
@@ -224,12 +245,17 @@ def process_document(entry_data: Dict, output_dir: Path, cache_dir: Path) -> Tup
                 f.write("---\n")
 
                 # Write PAGE_RESPONSE_COLUMNS fields in order
-                metadata = entry_data.get("metadata", {})
                 for column in PAGE_RESPONSE_COLUMNS:
-                    # Check if field exists in metadata
-                    if column in metadata:
-                        value = metadata[column]
-                        f.write(f"{column}: {value}\n")
+                    # Get the value for this page from the attributes lists
+                    column_values = page_response_data.get(column, [])
+
+                    if page_index is not None and page_index < len(column_values):
+                        value = column_values[page_index]
+                        # Convert None to null for YAML
+                        if value is None:
+                            f.write(f"{column}: null\n")
+                        else:
+                            f.write(f"{column}: {value}\n")
                     else:
                         # Write default values for missing fields
                         if column == "primary_language":
