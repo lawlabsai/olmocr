@@ -892,6 +892,7 @@ def generate_tests_from_html(html_content: str, pdf_id: str, page_num: int, rand
     for table_idx, table_data in enumerate(table_data_list):
         # Get the table data as a numpy array
         table_array = table_data.data
+        table_tests = []
 
         # Skip tables that are too small
         if table_array.shape[0] < 2 or table_array.shape[1] < 2:
@@ -981,7 +982,7 @@ def generate_tests_from_html(html_content: str, pdf_id: str, page_num: int, rand
                         test_data["left_heading"] = left_heading
 
             # Only add the test if we have at least one relation
-            if len(test_data) > 6:  # 6 is the number of required fields
+            if any(x in test_data for x in ["up", "down", "left", "right", "top_heading", "left_heading"]):
                 # Verify that the test passes with the current table HTML
                 # Create the actual test object
                 test_obj = TableTest(
@@ -1012,10 +1013,15 @@ def generate_tests_from_html(html_content: str, pdf_id: str, page_num: int, rand
 
                 # Only add tests that pass
                 if passed:
-                    tests.append(test_data)
+                    table_tests.append(test_data)
 
-            if len(tests) > 25:
+            if len(table_tests) > 25:
                 break
+
+        # Done with inner for loop iterating over cells
+        # So add in the bulk of the test cases back in now
+        tests.extend(table_tests)
+
 
     # Step 3: Generate TextPresenceTests and OrderingTests from markdown content
     # Convert HTML to markdown to get cleaner text for presence and ordering tests
