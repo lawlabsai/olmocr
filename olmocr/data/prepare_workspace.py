@@ -28,6 +28,15 @@ from olmocr.s3_utils import parse_s3_path
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
+# Define the metadata columns to write in front matter (in order)
+PAGE_RESPONSE_COLUMNS = [
+    "primary_language",
+    "is_rotation_valid",
+    "rotation_correction",
+    "is_table",
+    "is_diagram",
+]
+
 
 def fetch_s3_file(s3_url: str, local_path: str) -> str:
     """Download a file from an S3 URI (s3://bucket/key) to local_path."""
@@ -213,16 +222,35 @@ def process_document(entry_data: Dict, output_dir: Path, cache_dir: Path) -> Tup
             with open(md_path, "w", encoding="utf-8") as f:
                 # Write YAML front matter
                 f.write("---\n")
-                f.write(f"page_number: {page_num}\n")
-                f.write(f"source_file: {source_file}\n")
-                f.write(f"document_id: {doc_id}\n")
-                for k, v in entry_data["metadata"].items():
-                    if k != "Source-File":  # Already included as source_file
-                        f.write(f"{k}: {v}\n")
-                f.write("---\n\n")
 
-                # Write page text
-                f.write(page_text)
+                # Write PAGE_RESPONSE_COLUMNS fields in order
+                metadata = entry_data.get("metadata", {})
+                for column in PAGE_RESPONSE_COLUMNS:
+                    # Check if field exists in metadata
+                    if column in metadata:
+                        value = metadata[column]
+                        f.write(f"{column}: {value}\n")
+                    else:
+                        # Write default values for missing fields
+                        if column == "primary_language":
+                            f.write(f"{column}: null\n")
+                        elif column == "is_rotation_valid":
+                            f.write(f"{column}: true\n")
+                        elif column == "rotation_correction":
+                            f.write(f"{column}: 0\n")
+                        elif column == "is_table":
+                            f.write(f"{column}: false\n")
+                        elif column == "is_diagram":
+                            f.write(f"{column}: false\n")
+
+                # Handle closing delimiter based on whether text exists
+                if page_text is not None and len(page_text.strip()) > 0:
+                    f.write("---\n")
+                    # Write page text
+                    f.write(page_text)
+                else:
+                    # No text or empty text - close without newline
+                    f.write("---")
 
             # Extract PDF page
             if extract_pdf_page(local_pdf_path, page_num, str(pdf_path)):
