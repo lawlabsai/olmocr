@@ -344,7 +344,7 @@ async def generate_html_from_image(client, image_base64):
         # Step 1: Initial analysis and column detection
         analysis_response = await client.messages.create(
             model="claude-sonnet-4-5-20250929",
-            max_tokens=4000,
+            max_tokens=20000,
             temperature=0.1,
             messages=[
                 {
@@ -383,7 +383,7 @@ async def generate_html_from_image(client, image_base64):
         # Step 2: Initial HTML generation with detailed layout instructions
         initial_response = await client.messages.create(
             model="claude-sonnet-4-5-20250929",
-            max_tokens=12000,
+            max_tokens=20000,
             temperature=0.2,
             messages=[
                 {
@@ -457,7 +457,7 @@ async def generate_html_from_image(client, image_base64):
             # Step 4: Refinement - Show both images to Claude and ask for corrections
             refinement_response = await client.messages.create(
                 model="claude-sonnet-4-5-20250929",
-                max_tokens=12000,
+                max_tokens=20000,
                 temperature=0.1,
                 messages=[
                     {
@@ -477,6 +477,7 @@ async def generate_html_from_image(client, image_base64):
                                 "3. Spacing - are margins, padding, and spacing between elements correct?\n"
                                 "4. Occlusion - is any important content hidden or overlapping?\n"
                                 "5. Text formatting - are fonts, sizes, and styles appropriate?\n"
+                                "6. Tables - are the headers on tables are aligned with the correct corresponding columns?\n"
                                 f"The webpage will be viewed at {png_width}x{png_height} pixels.\n\n"
                                 "Provide a REVISED version of the HTML that corrects any issues you identified. "
                                 "Make sure all important elements are visible and the layout matches the original as closely as possible.\n"
