@@ -398,7 +398,7 @@ async def generate_html_from_image(client, image_base64):
             total_output_tokens += orientation_response.usage.output_tokens
 
         # Check orientation result
-        if orientation_text not in ["RIGHT_SIDE_UP"]:
+        if "RIGHT_SIDE_UP" not in orientation_text:
             print(f"Skipping page due to orientation: {orientation_text}")
             return None
 
@@ -516,10 +516,14 @@ async def generate_html_from_image(client, image_base64):
                 return initial_html
 
             # Step 4: Refinement - Show both images to Claude and ask for corrections
-            refinement_response = await client.messages.create(
+            async with client.messages.stream(
                 model="claude-sonnet-4-5-20250929",
-                max_tokens=20000,
-                temperature=0.1,
+                max_tokens=40000,
+                temperature=1.0,
+                thinking={
+                    "type": "enabled",
+                    "budget_tokens": 12000
+                },
                 messages=[
                     {
                         "role": "user",
@@ -547,7 +551,12 @@ async def generate_html_from_image(client, image_base64):
                         ],
                     }
                 ],
-            )
+            ) as refinement_stream:
+
+                async for event in refinement_stream:
+                    pass
+
+                refinement_response = await refinement_stream.get_final_message()
 
             # Check if refinement response was complete
             if hasattr(refinement_response, 'stop_reason') and refinement_response.stop_reason != 'end_turn':
