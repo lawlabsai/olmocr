@@ -4,7 +4,6 @@
 # This script will go through each CSV file, convert each page to PDF format, clean up the transcription using a grounded prompt in chatgpt-4o
 # and then output data in olmocr-format, where you have a .md file and a .pdf file named with the ItemID in a folder structure for
 # each initial CSV
-# We use https://pypi.org/project/img2pdf/ to convert the images to PDFs losslessly.
 
 import argparse
 import csv
@@ -14,8 +13,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, Optional, Set, Tuple
+from olmocr.image_utils import convert_image_to_pdf_bytes
 
-import img2pdf
 import requests
 from tqdm import tqdm
 
@@ -56,10 +55,10 @@ def download_image(url: str, output_path: Path, max_retries: int = 3) -> bool:
 
 
 def convert_image_to_pdf(image_path: Path, pdf_path: Path) -> bool:
-    """Convert image to PDF using img2pdf."""
+    """Convert image to PDF."""
     try:
         with open(pdf_path, "wb") as f:
-            f.write(img2pdf.convert(str(image_path)))
+            f.write(convert_image_to_pdf_bytes(str(image_path)))
         return True
     except Exception as e:
         print(f"Failed to convert {image_path} to PDF: {e}")

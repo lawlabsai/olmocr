@@ -82,7 +82,6 @@
 # Then, for each image, which is typically a scanned document page, we create a dataset in olmocr-format, where you have a .md file and a .pdf file named with the ItemID in a folder structure for
 # each initial jsonl file. Ex if you had rg_341/rg_341-53.jsonl, then you'd make rg_341/object_id.md and rg_341/object_id.pdf
 # If you have a TIFF file, you can compress it to jpg at 98% quality, targetting around 1-2MB in size.
-# Then use https://pypi.org/project/img2pdf/ to convert the images to PDFs losslessly.
 # Output files are named as naId-objectId-page-pageNum.{md,pdf} based on the target object from transcriptions.
 # Each JSONL file gets its own subfolder for organization.
 
@@ -94,11 +93,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, Optional, Set, Tuple
 
-import img2pdf
 import requests
 from PIL import Image
 from tqdm import tqdm
 
+from olmocr.image_utils import convert_image_to_pdf_bytes
 
 def download_image(url: str, output_path: Path, max_retries: int = 5) -> bool:
     """Download image from URL with exponential backoff retry logic."""
@@ -152,7 +151,7 @@ def process_image_file(image_path: Path, output_path: Path, target_size_mb: floa
 
             # Convert JPEG to PDF
             with open(output_path, "wb") as f:
-                f.write(img2pdf.convert(str(temp_jpg)))
+                f.write(convert_image_to_pdf_bytes(str(temp_jpg)))
 
             # Clean up temp file
             temp_jpg.unlink(missing_ok=True)
@@ -160,7 +159,7 @@ def process_image_file(image_path: Path, output_path: Path, target_size_mb: floa
         else:
             # For other formats, convert directly to PDF
             with open(output_path, "wb") as f:
-                f.write(img2pdf.convert(str(image_path)))
+                f.write(convert_image_to_pdf_bytes(str(image_path)))
 
         return True
     except Exception as e:
