@@ -1,7 +1,5 @@
 import argparse
 import asyncio
-import base64
-import tempfile
 import glob
 import hashlib
 import json
@@ -10,6 +8,7 @@ import os
 import random
 import re
 import subprocess
+import tempfile
 import uuid
 from collections import defaultdict
 from typing import Dict, List
@@ -37,13 +36,7 @@ total_output_tokens = 0
 def get_git_commit_hash():
     """Get the current git commit hash, if available."""
     try:
-        result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            check=True
-        )
+        result = subprocess.run(["git", "rev-parse", "HEAD"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
         return result.stdout.strip()
     except (subprocess.CalledProcessError, FileNotFoundError):
         # Git not available or not a git repository
@@ -427,7 +420,7 @@ async def generate_html_from_image(client, image_base64):
         )
 
         # Check if response was complete
-        if hasattr(analysis_response, 'stop_reason') and analysis_response.stop_reason != 'end_turn':
+        if hasattr(analysis_response, "stop_reason") and analysis_response.stop_reason != "end_turn":
             print(f"Warning: Analysis response incomplete (stop_reason: {analysis_response.stop_reason})")
             return None
 
@@ -472,7 +465,7 @@ async def generate_html_from_image(client, image_base64):
         )
 
         # Check if response was complete
-        if hasattr(initial_response, 'stop_reason') and initial_response.stop_reason != 'end_turn':
+        if hasattr(initial_response, "stop_reason") and initial_response.stop_reason != "end_turn":
             print(f"Warning: Initial HTML response incomplete (stop_reason: {initial_response.stop_reason})")
             return None
 
@@ -491,7 +484,6 @@ async def generate_html_from_image(client, image_base64):
         if not initial_html:
             print("Warning: No HTML code block found in initial response")
             return None
-
 
         # Step 3: Render the initial HTML to PDF and then back to PNG for comparison
         # Create a temporary PDF file
@@ -520,15 +512,15 @@ async def generate_html_from_image(client, image_base64):
                 model="claude-sonnet-4-5-20250929",
                 max_tokens=40000,
                 temperature=1.0,
-                thinking={
-                    "type": "enabled",
-                    "budget_tokens": 12000
-                },
+                thinking={"type": "enabled", "budget_tokens": 12000},
                 messages=[
                     {
                         "role": "user",
                         "content": [
-                            {"type": "text", "text": "I'm going to show you two images:\n1. The original document\n2. How the HTML I generated renders\n\nPlease compare them carefully and provide a revised version of the HTML that better matches the original."},
+                            {
+                                "type": "text",
+                                "text": "I'm going to show you two images:\n1. The original document\n2. How the HTML I generated renders\n\nPlease compare them carefully and provide a revised version of the HTML that better matches the original.",
+                            },
                             {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": image_base64}},
                             {"type": "text", "text": "Above is the ORIGINAL document."},
                             {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": rendered_image_base64}},
@@ -546,7 +538,7 @@ async def generate_html_from_image(client, image_base64):
                                 f"The webpage will be viewed at {png_width}x{png_height} pixels.\n\n"
                                 "Provide a REVISED version of the HTML that corrects any issues you identified. "
                                 "Make sure all important elements are visible and the layout matches the original as closely as possible.\n"
-                                "Output the complete revised HTML in a ```html code block."
+                                "Output the complete revised HTML in a ```html code block.",
                             },
                         ],
                     }
@@ -559,7 +551,7 @@ async def generate_html_from_image(client, image_base64):
                 refinement_response = await refinement_stream.get_final_message()
 
             # Check if refinement response was complete
-            if hasattr(refinement_response, 'stop_reason') and refinement_response.stop_reason != 'end_turn':
+            if hasattr(refinement_response, "stop_reason") and refinement_response.stop_reason != "end_turn":
                 print(f"Warning: Refinement response incomplete (stop_reason: {refinement_response.stop_reason})")
                 # Return initial HTML as fallback since it was complete
                 return initial_html
@@ -1022,7 +1014,6 @@ def generate_tests_from_html(html_content: str, pdf_id: str, page_num: int, rand
         # So add in the bulk of the test cases back in now
         tests.extend(table_tests)
 
-
     # Step 3: Generate TextPresenceTests and OrderingTests from markdown content
     # Convert HTML to markdown to get cleaner text for presence and ordering tests
     markdown_content = html_to_markdown_with_frontmatter(html_content)
@@ -1290,7 +1281,7 @@ async def process_pdf(pdf_info, args, client, pdf_filter=None):
         if not html_content:
             print(f"Failed to generate HTML for {pdf_path}, page {page_num}")
             return None
-        
+
         # Add git commit meta tag if available
         git_commit = get_git_commit_hash()
         if git_commit:

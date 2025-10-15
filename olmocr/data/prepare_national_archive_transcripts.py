@@ -99,6 +99,7 @@ from tqdm import tqdm
 
 from olmocr.image_utils import convert_image_to_pdf_bytes
 
+
 def download_image(url: str, output_path: Path, max_retries: int = 5) -> bool:
     """Download image from URL with exponential backoff retry logic."""
     for attempt in range(max_retries):

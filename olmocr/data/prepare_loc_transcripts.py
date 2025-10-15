@@ -13,10 +13,11 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, Optional, Set, Tuple
-from olmocr.image_utils import convert_image_to_pdf_bytes
 
 import requests
 from tqdm import tqdm
+
+from olmocr.image_utils import convert_image_to_pdf_bytes
 
 
 def fix_image_url(url: str) -> str:

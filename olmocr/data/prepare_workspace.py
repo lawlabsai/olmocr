@@ -113,7 +113,7 @@ def parse_jsonl_entry(entry: Dict) -> Optional[Dict]:
             "source_file": source_file,
             "metadata": metadata,
             "pdf_page_numbers": pdf_page_numbers,
-            "page_response_data": page_response_data
+            "page_response_data": page_response_data,
         }
     except Exception as e:
         logger.error(f"Error parsing JSONL entry: {e}")

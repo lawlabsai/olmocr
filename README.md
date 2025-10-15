@@ -209,6 +209,20 @@ python -m olmocr.pipeline ./localworkspace --markdown --pdfs tests/gnarly_pdfs/*
 
 With the addition of the `--markdown` flag, results will be stored as markdown files inside of `./localworkspace/markdown/`. 
 
+#### Viewing Results
+
+The `./localworkspace/` workspace folder will then have both [Dolma](https://github.com/allenai/dolma) and markdown files (if using `--markdown`).
+
+
+```bash
+cat localworkspace/markdown/olmocr-sample.md 
+```
+
+```
+olmOCR: Unlocking Trillions of Tokens in PDFs with Vision Language Models
+...
+```
+
 ### Using an Inference Provider or External Server
 
 If you have a vLLM server already running elsewhere (or any inference platform implementing the OpenAI API), you can point olmOCR to use it instead of spawning a local instance:
@@ -240,20 +254,6 @@ Notes on arguments
 - `--model`: The model identifier, ex. `allenai/olmOCR-7B-1025`, different providers have different names, and if you run locally, you can use `olmocr`
 - Other arguments work the same as with local inference
 
-
-#### Viewing Results
-
-The `./localworkspace/` workspace folder will then have both [Dolma](https://github.com/allenai/dolma) and markdown files (if using `--markdown`).
-
-
-```bash
-cat localworkspace/markdown/olmocr-sample.md 
-```
-
-```
-olmOCR: Unlocking Trillions of Tokens in PDFs with Vision Language Models
-...
-```
 
 ### Multi-node / Cluster Usage
 

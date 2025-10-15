@@ -214,17 +214,17 @@ async def apost(url, json_data, api_key=None):
                 # Read chunk size line
                 size_line = await reader.readline()
                 chunk_size = int(size_line.strip(), 16)  # Hex format
-                
+
                 if chunk_size == 0:
                     await reader.readline()  # Read final CRLF
                     break
-                
+
                 chunk_data = await reader.readexactly(chunk_size)
                 chunks.append(chunk_data)
-                
+
                 # Read trailing CRLF after chunk data
                 await reader.readline()
-            
+
             response_body = b"".join(chunks)
         elif headers.get("connection", "") == "close":
             # Read until connection closes
@@ -1121,7 +1121,6 @@ async def main():
     )
     server_group.add_argument("--api_key", type=str, default=None, help="API key for authenticated remote servers (e.g., DeepInfra)")
 
-
     vllm_group = parser.add_argument_group(
         "VLLM arguments", "These arguments are passed to vLLM. Any unrecognized arguments are also automatically forwarded to vLLM."
     )
@@ -1132,7 +1131,6 @@ async def main():
     vllm_group.add_argument("--tensor-parallel-size", "-tp", type=int, default=1, help="Tensor parallel size for vLLM")
     vllm_group.add_argument("--data-parallel-size", "-dp", type=int, default=1, help="Data parallel size for vLLM")
     vllm_group.add_argument("--port", type=int, default=30024, help="Port to use for the VLLM server")
-
 
     # Beaker/job running stuff
     beaker_group = parser.add_argument_group("beaker/cluster execution")
