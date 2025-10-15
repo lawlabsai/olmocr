@@ -211,8 +211,29 @@ async def apost(url, json_data, api_key=None):
         if "content-length" in headers:
             body_length = int(headers["content-length"])
             response_body = await reader.readexactly(body_length)
+        elif headers.get("transfer-encoding", "") == "chunked":
+            chunks = []
+            while True:
+                # Read chunk size line
+                size_line = await reader.readline()
+                chunk_size = int(size_line.strip(), 16)  # Hex format
+                
+                if chunk_size == 0:
+                    await reader.readline()  # Read final CRLF
+                    break
+                
+                chunk_data = await reader.readexactly(chunk_size)
+                chunks.append(chunk_data)
+                
+                # Read trailing CRLF after chunk data
+                await reader.readline()
+            
+            response_body = b"".join(chunks)
+        elif headers.get("connection", "") == "close":
+            # Read until connection closes
+            response_body = await reader.read()
         else:
-            raise ConnectionError("Anything other than fixed content length responses are not implemented yet")
+            raise ConnectionError("Cannot determine response body length")
 
         return status_code, response_body
     except Exception as e:
@@ -232,11 +253,11 @@ async def process_page(args, worker_id: int, pdf_orig_path: str, pdf_local_path:
     if args.server:
         server_url = args.server.rstrip("/")
         # Check if the server URL already contains '/v1/openai' (DeepInfra case)
-        if "/v1/openai" in server_url:
+        if "/v1" in server_url:
             COMPLETION_URL = f"{server_url}/chat/completions"
         else:
             COMPLETION_URL = f"{server_url}/v1/chat/completions"
-        logger.debug(f"Using completion URL: {COMPLETION_URL}")
+        logger.warning(f"Using completion URL: {COMPLETION_URL}")
     else:
         COMPLETION_URL = f"http://localhost:{BASE_SERVER_PORT}/v1/chat/completions"
     MAX_RETRIES = args.max_page_retries
@@ -778,7 +799,7 @@ async def vllm_server_ready(args):
     if args.server:
         # Check if the server URL already contains '/v1/openai' (DeepInfra case)
         server_url = args.server.rstrip("/")
-        if "/v1/openai" in server_url:
+        if "/v1" in server_url:
             url = f"{server_url}/models"
         else:
             url = f"{server_url}/v1/models"
