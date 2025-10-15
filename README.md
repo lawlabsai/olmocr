@@ -209,40 +209,35 @@ python -m olmocr.pipeline ./localworkspace --markdown --pdfs tests/gnarly_pdfs/*
 
 With the addition of the `--markdown` flag, results will be stored as markdown files inside of `./localworkspace/markdown/`. 
 
-### Using External vLLM Server
+### Using an Inference Provider or External Server
 
-If you have a vLLM server already running elsewhere (or any inference platform implementing the relevant subset of the OpenAI API), you can point olmOCR to use it instead of spawning a local instance:
+If you have a vLLM server already running elsewhere (or any inference platform implementing the OpenAI API), you can point olmOCR to use it instead of spawning a local instance:
 
 ```bash
 # Use external vLLM server instead of local one
-python -m olmocr.pipeline ./localworkspace --server http://remote-server:8000 --markdown --pdfs tests/gnarly_pdfs/*.pdf
+python -m olmocr.pipeline ./localworkspace --server http://remote-server:8000/v1 --markdown --pdfs tests/gnarly_pdfs/*.pdf
 ```
 
 The served model name should be `olmocr`. An example vLLM launch command would be:
 ```bash
-vllm serve allenai/olmOCR-7B-0825-FP8 --served-model-name olmocr --max-model-len 16384
+vllm serve allenai/olmOCR-7B-1025-FP8 --served-model-name olmocr --max-model-len 16384
 ```
 
-#### Run olmOCR with the DeepInfra server endpoint:
-Signup at [DeepInfra](https://deepinfra.com/) and get your API key from the DeepInfra dashboard.
-Store the API key as an environment variable.
-```bash
-export DEEPINFRA_API_KEY="your-api-key-here"
-```
+#### Verified External Providers
 
-```bash
-python -m olmocr.pipeline ./localworkspace \
-  --server https://api.deepinfra.com/v1/openai \
-  --api_key $DEEPINFRA_API_KEY \
-  --pages_per_group 100 \
-  --model allenai/olmOCR-7B-0825 \
-  --markdown \
-  --pdfs path/to/your/*.pdf
-```
-- `--server`: DeepInfra's OpenAI-compatible endpoint: `https://api.deepinfra.com/v1/openai`
-- `--api_key`: Your DeepInfra API key
+We have tested `olmOCR-7B-1025-FP8` on these external model providers and confirmed that they work
+
+| Provider  | $/1M Input tokens | $/1M Output tokens | Example Command                                                                                                                                                            |
+|-----------|-------------------|--------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [DeepInfra](https://deepinfra.com/) | $0.14             | $0.80              | `python -m olmocr.pipeline ./localworkspace1 --server https://api.deepinfra.com/v1/openai --api_key DfXXXXXXX --model allenai/olmOCR-7B-0825 --pdfs tests/gnarly_pdfs/*.pdf` |
+| [Parasail](https://www.saas.parasail.io/serverless?name=olmocr-7b-1025-fp8)  | $0.10             | $0.20              | `python -m olmocr.pipeline ./localworkspace1 --server https://api.parasail.io/v1 --api_key psk-XXXXX --model parasail-olmocr-7b-1025-fp8 --pdfs tests/gnarly_pdfs/*.pdf`              |
+|           |                   |                    |                                                                                                                                                                            |
+
+Notes on arguments
+- `--server`: Defines the OpenAI-compatible endpoint: ex `https://api.deepinfra.com/v1/openai`
+- `--api_key`: Your API key, bassed in via Authorization Bearer HTTP header
 - `--pages_per_group`: You may want a smaller number of pages per group as many external provides have lower concurrent request limits
-- `--model`: The model identifier on DeepInfra: `allenai/olmOCR-7B-0825`
+- `--model`: The model identifier, ex. `allenai/olmOCR-7B-1025`, different providers have different names, and if you run locally, you can use `olmocr`
 - Other arguments work the same as with local inference
 
 
