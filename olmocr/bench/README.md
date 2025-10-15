@@ -73,6 +73,18 @@ to run it against your own OCR tools. Your tool just needs to support Markdown o
       <td align="center">70.1 ± 1.1</td>
     </tr> -->
     <tr>
+      <td align="left">MinerU v2.5.4</td>
+      <td align="center">75.5</td>
+      <td align="center">50.2</td>
+      <td align="center">59.9</td>
+      <td align="center">19.2</td>
+      <td align="center"><strong>97.0</strong></td>
+      <td align="center">58.7</td>
+      <td align="center">44.6</td>
+      <td align="center">97.8</td>
+      <td align="center">62.9 ± 1.1</td>
+    </tr>
+    <!-- <tr>
       <td align="left">MinerU v1.3.10</td>
       <td align="center">75.4</td>
       <td align="center">47.4</td>
@@ -83,7 +95,7 @@ to run it against your own OCR tools. Your tool just needs to support Markdown o
       <td align="center">39.1</td>
       <td align="center">96.6</td>
       <td align="center">61.5 ± 1.1</td>
-    </tr>
+    </tr> -->
     <tr>
       <td align="left">Mistral OCR API</td>
       <td align="center">77.2</td>

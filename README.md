@@ -67,28 +67,28 @@ We also ship a comprehensive benchmark suite covering over 7,000 test cases acro
   </thead>
   <tbody>
     <tr>
-      <td align="left">Marker v1.7.5 (base, force_ocr)</td>
-      <td align="center">76.0</td>
-      <td align="center">57.9</td>
-      <td align="center">57.6</td>
-      <td align="center">27.8</td>
-      <td align="center">84.9</td>
+      <td align="left">Marker v1.10.1 (base, force_ocr)</td>
+      <td align="center"><strong>83.8</strong></td>
+      <td align="center">66.8</td>
       <td align="center">72.9</td>
-      <td align="center"><strong>84.6</strong></td>
-      <td align="center">99.1</td>
-      <td align="center">70.1 ± 1.1</td>
+      <td align="center">33.5</td>
+      <td align="center">86.6</td>
+      <td align="center">80.0</td>
+      <td align="center"><strong>85.7</strong></td>
+      <td align="center">99.3</td>
+      <td align="center">76.1 ± 1.1</td>
     </tr>
     <tr>
-      <td align="left">MinerU v1.3.10</td>
-      <td align="center">75.4</td>
-      <td align="center">47.4</td>
-      <td align="center">60.9</td>
-      <td align="center">17.3</td>
-      <td align="center"><strong>96.6</strong></td>
-      <td align="center">59.0</td>
-      <td align="center">39.1</td>
-      <td align="center">96.6</td>
-      <td align="center">61.5 ± 1.1</td>
+      <td align="left">MinerU v2.5.4</td>
+      <td align="center">75.5</td>
+      <td align="center">50.2</td>
+      <td align="center">59.9</td>
+      <td align="center">19.2</td>
+      <td align="center"><strong>97.0</strong></td>
+      <td align="center">58.7</td>
+      <td align="center">44.6</td>
+      <td align="center">97.8</td>
+      <td align="center">62.9 ± 1.1</td>
     </tr>
     <tr>
       <td align="left">Mistral OCR API</td>
