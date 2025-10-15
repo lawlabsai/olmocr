@@ -214,17 +214,17 @@ async def apost(url, json_data, api_key=None):
                 # Read chunk size line
                 size_line = await reader.readline()
                 chunk_size = int(size_line.strip(), 16)  # Hex format
-
+                
                 if chunk_size == 0:
                     await reader.readline()  # Read final CRLF
                     break
-
+                
                 chunk_data = await reader.readexactly(chunk_size)
                 chunks.append(chunk_data)
-
+                
                 # Read trailing CRLF after chunk data
                 await reader.readline()
-
+            
             response_body = b"".join(chunks)
         elif headers.get("connection", "") == "close":
             # Read until connection closes
@@ -258,19 +258,13 @@ async def process_page(args, worker_id: int, pdf_orig_path: str, pdf_local_path:
 
     while attempt < MAX_RETRIES:
         lookup_attempt = min(attempt, len(TEMPERATURE_BY_ATTEMPT) - 1)
-        # For external servers (like DeepInfra), use the model name from args
-        # For local inference, always use 'olmocr'
-        if args.server and hasattr(args, "model"):
-            model_name = args.model
-        else:
-            model_name = "olmocr"
 
         query = await build_page_query(
             pdf_local_path,
             page_num,
             args.target_longest_image_dim,
             image_rotation=cumulative_rotation,
-            model_name=model_name,
+            model_name=args.model,
         )
         # Change temperature as number of attempts increases to overcome repetition issues at expense of quality
         query["temperature"] = TEMPERATURE_BY_ATTEMPT[lookup_attempt]
@@ -1121,6 +1115,7 @@ async def main():
     )
     server_group.add_argument("--api_key", type=str, default=None, help="API key for authenticated remote servers (e.g., DeepInfra)")
 
+
     vllm_group = parser.add_argument_group(
         "VLLM arguments", "These arguments are passed to vLLM. Any unrecognized arguments are also automatically forwarded to vLLM."
     )
@@ -1131,6 +1126,7 @@ async def main():
     vllm_group.add_argument("--tensor-parallel-size", "-tp", type=int, default=1, help="Tensor parallel size for vLLM")
     vllm_group.add_argument("--data-parallel-size", "-dp", type=int, default=1, help="Data parallel size for vLLM")
     vllm_group.add_argument("--port", type=int, default=30024, help="Port to use for the VLLM server")
+
 
     # Beaker/job running stuff
     beaker_group = parser.add_argument_group("beaker/cluster execution")
@@ -1279,9 +1275,10 @@ async def main():
 
     # Download the model before you do anything else
     if use_internal_server:
-        args.server = "http://localhost:{args.port}/v1"
-        logger.info(f"Using internal server at {args.server}")
         model_name_or_path = await download_model(args.model)
+        args.server = f"http://localhost:{args.port}/v1"
+        args.model = "olmocr" # Internal server always uses this name for the model, for supporting weird local model paths
+        logger.info(f"Using internal server at {args.server}")
     else:
         logger.info(f"Using external server at {args.server}")
         model_name_or_path = None
