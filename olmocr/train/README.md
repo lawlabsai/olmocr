@@ -112,12 +112,18 @@ then convert them into HTML templates. Those HTML templates were then rendered, 
 We then ran a GPRO based training process with a reward based on the benchmark score on this synthetic benchmark.
 
 ```bash
-./scripts/train/grpotrainer-beaker-multi-gpu-augusta.sh --num-gpus 8      --model_name s3://ai2-oe-data/jakep/olmocr/qwen2.5-vl-7b-olmocrv4_1epoch_promptv4_mix102
-5_more_rotation_filtered-8372 --train_bench_data_folder /data/jakep/grpo_data_mixes/olmocr-synthmix-1025-v2-rotate10p/bench_data --reward_bench 1.0 --reward_front_matter 1.0 --reward_eos 1
-.0 --beta 0.01 --name promptv4_mix1025_more_rotation_multigpu_v1_beta_01_lr2e-6_frontmatter1_0_eos_28gen_synthmix-1025_rotate10p_importanceseq_finalrun_filtered_0 --seed 0 --importance_sampling_level sequence --gradient_accumulation_steps 28 --learning_rate 2e-6 --preemptible
+
+./scripts/train/grpotrainer-beaker-multi-gpu-augusta.sh --num-gpus 8      --model_name s3://ai2-oe-data/jakep/olmocr/qwen2.5-vl-7b-olmocrv4_1epoch_promptv4_mix1025_more_rotation-8372 --train_bench_data_folder /data/jakep/grpo_data_mixes/olmocr-synthmix-1025-v2-rotate10p/bench_data --reward_bench 1.0 --reward_front_matter 1.0 --reward_eos 1.0 --beta 0.01 --name promptv4_mix1025_more_rotation_multigpu_v1_beta_01_lr2e-6_frontmatter1_0_eos_28gen_synthmix-1025_rotate10p_finalrun1 --seed 1 --gradient_accumulation_steps 28 --learning_rate 2e-6 --preemptible
+
+./scripts/train/grpotrainer-beaker-multi-gpu-augusta.sh --num-gpus 8      --model_name s3://ai2-oe-data/jakep/olmocr/qwen2.5-vl-7b-olmocrv4_1epoch_promptv4_mix1025_more_rotation-8372 --train_bench_data_folder /data/jakep/grpo_data_mixes/olmocr-synthmix-1025-v2-rotate10p/bench_data --reward_bench 1.0 --reward_front_matter 1.0 --reward_eos 1.0 --beta 0.01 --name promptv4_mix1025_more_rotation_multigpu_v1_beta_01_lr2e-6_frontmatter1_0_eos_28gen_synthmix-1025_rotate10p_importanceseq_finalrun1 --seed 1 --importance_sampling_level sequence --gradient_accumulation_steps 28 --learning_rate 2e-6 --preemptible
 ```
 
-6 seeds were run, and then merged into a final checkpoint.
+6 seeds were run, 3 with importance sampling level=sequence, and 3 with importance sampling level=token, and then merged into a final checkpoint. This can be done by passing more arguments to the `prepare_checkpoint` script.
+
+```bash
+# Final souping command for olmocr-7b-1025
+python -m olmocr.train.prepare_checkpoint s3://ai2-oe-data/jakep/olmocr-grpo-checkpoints/promptv4_mix1025_more_rotation_multigpu_v1_beta_01_lr2e-6_frontmatter1_0_eos_28gen_synthmix-1025_rotate10p_finalrun1-multigpu-01K60YDRKCJY82TKF0FP6WE4VA/checkpoint-306/ s3://ai2-oe-data/jakep/olmocr-grpo-checkpoints/promptv4_mix1025_more_rotation_multigpu_v1_beta_01_lr2e-6_frontmatter1_0_eos_28gen_synthmix-1025_rotate10p_finalrun2-multigpu-01K60YGB5Y2G15BG8CX4H1QW23/checkpoint-306/ s3://ai2-oe-data/jakep/olmocr-grpo-checkpoints/promptv4_mix1025_more_rotation_multigpu_v1_beta_01_lr2e-6_frontmatter1_0_eos_28gen_synthmix-1025_rotate10p_finalrun3-multigpu-01K60YGM2QEKJK9FC94JJG5YDP/checkpoint-306/ s3://ai2-oe-data/jakep/olmocr-grpo-checkpoints/promptv4_mix1025_more_rotation_multigpu_v1_beta_01_lr2e-6_frontmatter1_0_eos_28gen_synthmix-1025_rotate10p_importanceseq_finalrun3-multigpu-01K60YJBGC3AR7STTNH23BWH8A/checkpoint-306/ s3://ai2-oe-data/jakep/olmocr-grpo-checkpoints/promptv4_mix1025_more_rotation_multigpu_v1_beta_01_lr2e-6_frontmatter1_0_eos_28gen_synthmix-1025_rotate10p_importanceseq_finalrun2-multigpu-01K60YJ315K1GYCPN8VADTN7C3/checkpoint-306/ s3://ai2-oe-data/jakep/olmocr-grpo-checkpoints/promptv4_mix1025_more_rotation_multigpu_v1_beta_01_lr2e-6_frontmatter1_0_eos_28gen_synthmix-1025_rotate10p_importanceseq_finalrun1-multigpu-01K60YHSHCNS9RZWSF9E56J9FB/checkpoint-306/ s3://ai2-oe-data/jakep/olmocr-grpo-checkpoints/promptv4_mix1025_more_rotation_multigpu_v1_beta_01_lr2e-6_frontmatter1_0_eos_28gen_synthmix-1025_rotate10p_soupersoup
+```
 
 ### Notes for AI2
 If you are a collaborator of AI2, you can use the following scripts to run training and inference
