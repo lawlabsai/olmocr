@@ -22,6 +22,7 @@ logger = logging.getLogger("olmocr_runner")
 @dataclass
 class Args:
     model: str = "allenai/olmOCR-7B-1025-FP8"
+    port: int = 3000
     model_chat_template: str = "qwen2-vl"
     model_max_context: int = 8192
     target_longest_image_dim: int = 1024
