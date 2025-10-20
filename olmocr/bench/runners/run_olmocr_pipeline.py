@@ -26,6 +26,7 @@ class Args:
     port: int = 3000
     model_chat_template: str = "qwen2-vl"
     max_model_len: int = 8192
+    guided_decoding: bool = False
     gpu_memory_utilization: float = 0.8
     target_longest_image_dim: int = 1024
     target_anchor_text_len: int = 6000
