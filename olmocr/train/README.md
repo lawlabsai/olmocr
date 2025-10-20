@@ -80,7 +80,7 @@ This is setup to train on a single B200 GPU, and training will take around 24-48
 
 But this is training for ~270,000 pages per epoch, so it's quite a big endeavour. We hope to add more options to make further finetuning your own small model more simple and easy.
 
-### Launch training
+### Launch training job
 
 ```bash
 python -m olmocr.train.train --config olmocr/train/configs/v0.4.0/qwen25_vl_olmocrv4_rotation_1epoch_mix_1025_filtered.yaml
@@ -108,8 +108,20 @@ python -m olmocr.train.compress_checkpoint --config olmocr/train/quantization_co
 occuring on a synthetic version of olmOCR-bench.
 
 [olmOCR-synthmix-1025](https://huggingface.co/datasets/allenai/olmOCR-synthmix-1025) was created by having Claude Sonnet take real PDF documents,
-then convert them into HTML templates. Those HTML templates were then rendered, and converted into synthetic olmOCR-bench style benchmarks.
+then convert them into HTML templates. 
+ Those HTML templates were then rendered, and converted into synthetic olmOCR-bench style benchmarks.
 We then ran a GPRO based training process with a reward based on the benchmark score on this synthetic benchmark.
+
+
+You can use the following command to download the synthetic dataset:
+
+```bash
+hf download allenai/olmOCR-synthmix-1025 --repo-type dataset --local-dir olmOCR-synthmix-1025
+```
+
+This was generated using [mine_html_templates.py](olmocr/bench/synth/mine_html_templates.py), and is in the same format as other olmOCR-bench test cases. This means you can measure performance against these cases directly in the same way as running any other olmOCR-bench test suite.
+
+The following scripts show how to start training, which is performed on an 8xH100 GPU node. One GPU is dedicated to running VLLM, while the other 7 are used to run training.
 
 ```bash
 

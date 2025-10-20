@@ -35,7 +35,7 @@ Features:
  - (Based on a 7B parameter VLM, so it requires a GPU)
 
 ### News
- - October 21, 2025 - v0.4.0 - [New model release](https://huggingface.co/allenai/olmOCR-7B-1025-FP8), boosts olmOCR-bench score by ~4 points using RL training.
+ - October 21, 2025 - v0.4.0 - [New model release](https://huggingface.co/allenai/olmOCR-7B-1025-FP8), boosts olmOCR-bench score by ~4 points using synthetic data and introduces RL training.
  - August 13, 2025 - v0.3.0 - [New model release](https://huggingface.co/allenai/olmOCR-7B-0825-FP8), fixes auto-rotation detection, and hallucinations on blank documents.
  - July 24, 2025 - v0.2.1 - [New model release](https://huggingface.co/allenai/olmOCR-7B-0725-FP8), scores 3 points higher on [olmOCR-Bench](https://github.com/allenai/olmocr/tree/main/olmocr/bench), also runs significantly faster because it's default FP8, and needs much fewer retries per document.
  - July 23, 2025 - v0.2.0 - New cleaned up [trainer code](https://github.com/allenai/olmocr/tree/main/olmocr/train), makes it much simpler to train olmOCR models yourself.
@@ -243,7 +243,7 @@ We have tested `olmOCR-7B-1025-FP8` on these external model providers and confir
 
 | Provider  | $/1M Input tokens | $/1M Output tokens | Example Command                                                                                                                                                            |
 |-----------|-------------------|--------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [DeepInfra](https://deepinfra.com/) | $0.14             | $0.80              | `python -m olmocr.pipeline ./localworkspace1 --server https://api.deepinfra.com/v1/openai --api_key DfXXXXXXX --model allenai/olmOCR-7B-0825 --pdfs tests/gnarly_pdfs/*.pdf` |
+| [DeepInfra](https://deepinfra.com/) | $0.14             | $0.80              | `python -m olmocr.pipeline ./localworkspace1 --server https://api.deepinfra.com/v1/openai --api_key DfXXXXXXX --model allenai/olmOCR-7B-1025 --pdfs tests/gnarly_pdfs/*.pdf` |
 | [Parasail](https://www.saas.parasail.io/serverless?name=olmocr-7b-1025-fp8)  | $0.10             | $0.20              | `python -m olmocr.pipeline ./localworkspace1 --server https://api.parasail.io/v1 --api_key psk-XXXXX --model parasail-olmocr-7b-1025-fp8 --pdfs tests/gnarly_pdfs/*.pdf`              |
 |           |                   |                    |                                                                                                                                                                            |
 

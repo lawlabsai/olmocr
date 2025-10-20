@@ -9,8 +9,8 @@ from olmocr.pipeline import (
     PageResult,
     WorkerTracker,
     process_page,
-    sglang_server_host,
-    sglang_server_ready,
+    vllm_server_host,
+    vllm_server_ready,
 )
 
 # Setup basic logging
@@ -21,7 +21,7 @@ logger = logging.getLogger("olmocr_runner")
 # Basic configuration
 @dataclass
 class Args:
-    model: str = "allenai/olmOCR-7B-0225-preview"
+    model: str = "allenai/olmOCR-7B-1025-FP8"
     model_chat_template: str = "qwen2-vl"
     model_max_context: int = 8192
     target_longest_image_dim: int = 1024
@@ -33,7 +33,7 @@ class Args:
 server_check_lock = asyncio.Lock()
 
 
-async def run_olmocr_pipeline(pdf_path: str, page_num: int = 1, model: str = "allenai/olmOCR-7B-0225-preview") -> Optional[str]:
+async def run_olmocr_pipeline(pdf_path: str, page_num: int = 1, model: str = "allenai/olmOCR-7B-1025-FP8") -> Optional[str]:
     """
     Process a single page of a PDF using the official olmocr pipeline's process_page function
 
@@ -60,12 +60,12 @@ async def run_olmocr_pipeline(pdf_path: str, page_num: int = 1, model: str = "al
     async with server_check_lock:
         _server_task = None
         try:
-            await asyncio.wait_for(sglang_server_ready(), timeout=5)
-            logger.info("Using existing sglang server")
+            await asyncio.wait_for(vllm_server_ready(args), timeout=5)
+            logger.info("Using existing vllm server")
         except Exception:
-            logger.info("Starting new sglang server")
-            _server_task = asyncio.create_task(sglang_server_host(args.model, args, semaphore))
-            await sglang_server_ready()
+            logger.info("Starting new vllm server")
+            _server_task = asyncio.create_task(vllm_server_host(args.model, args, semaphore))
+            await vllm_server_ready(args)
 
     try:
         # Process the page using the pipeline's process_page function
