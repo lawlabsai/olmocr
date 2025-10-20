@@ -73,6 +73,9 @@ async def run_olmocr_pipeline(pdf_path: str, page_num: int = 1, model: str = "al
             _server_task = asyncio.create_task(vllm_server_host(args.model, args, semaphore))
             await vllm_server_ready(args)
 
+    # Sets the model name used in the pipeline code, it's a hack sadly
+    args.model = "olmocr"
+
     try:
         # Process the page using the pipeline's process_page function
         # Note: process_page expects both original path and local path
