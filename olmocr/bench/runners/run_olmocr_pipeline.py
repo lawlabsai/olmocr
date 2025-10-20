@@ -22,8 +22,8 @@ logger = logging.getLogger("olmocr_runner")
 @dataclass
 class Args:
     model: str = "allenai/olmOCR-7B-1025-FP8"
-    server: str = "http://localhost:30000/v1"
-    port: int = 3000
+    server: str = "http://localhost:30044/v1"
+    port: int = 30044
     model_chat_template: str = "qwen2-vl"
     max_model_len: int = 8192
     guided_decoding: bool = False
