@@ -24,7 +24,8 @@ class Args:
     model: str = "allenai/olmOCR-7B-1025-FP8"
     port: int = 3000
     model_chat_template: str = "qwen2-vl"
-    model_max_context: int = 8192
+    max_model_len: int = 8192
+    gpu_memory_utilization: float = 0.8
     target_longest_image_dim: int = 1024
     target_anchor_text_len: int = 6000
     max_page_retries: int = 8
