@@ -29,6 +29,8 @@ class Args:
     target_anchor_text_len: int = 6000
     max_page_retries: int = 8
     max_page_error_rate: float = 0.004
+    tensor_parallel_size: int = 1
+    data_parallel_size: int = 1
 
 
 server_check_lock = asyncio.Lock()
