@@ -21,7 +21,7 @@ logger = logging.getLogger("olmocr_runner")
 # Basic configuration
 @dataclass
 class Args:
-    model: str = "allenai/olmOCR-7B-1025-FP8"
+    model: str = "allenai/olmOCR-2-7B-1025-FP8"
     server: str = "http://localhost:30044/v1"
     port: int = 30044
     model_chat_template: str = "qwen2-vl"
@@ -39,7 +39,7 @@ class Args:
 server_check_lock = asyncio.Lock()
 
 
-async def run_olmocr_pipeline(pdf_path: str, page_num: int = 1, model: str = "allenai/olmOCR-7B-1025-FP8") -> Optional[str]:
+async def run_olmocr_pipeline(pdf_path: str, page_num: int = 1, model: str = "allenai/olmOCR-2-7B-1025-FP8") -> Optional[str]:
     """
     Process a single page of a PDF using the official olmocr pipeline's process_page function
 

@@ -35,7 +35,7 @@ Features:
  - (Based on a 7B parameter VLM, so it requires a GPU)
 
 ### News
- - October 21, 2025 - v0.4.0 - [New model release](https://huggingface.co/allenai/olmOCR-7B-1025-FP8), boosts olmOCR-bench score by ~4 points using synthetic data and introduces RL training.
+ - October 21, 2025 - v0.4.0 - [New model release](https://huggingface.co/allenai/olmOCR-2-7B-1025-FP8), boosts olmOCR-bench score by ~4 points using synthetic data and introduces RL training.
  - August 13, 2025 - v0.3.0 - [New model release](https://huggingface.co/allenai/olmOCR-7B-0825-FP8), fixes auto-rotation detection, and hallucinations on blank documents.
  - July 24, 2025 - v0.2.1 - [New model release](https://huggingface.co/allenai/olmOCR-7B-0725-FP8), scores 3 points higher on [olmOCR-Bench](https://github.com/allenai/olmocr/tree/main/olmocr/bench), also runs significantly faster because it's default FP8, and needs much fewer retries per document.
  - July 23, 2025 - v0.2.0 - New cleaned up [trainer code](https://github.com/allenai/olmocr/tree/main/olmocr/train), makes it much simpler to train olmOCR models yourself.
@@ -234,12 +234,12 @@ python -m olmocr.pipeline ./localworkspace --server http://remote-server:8000/v1
 
 The served model name should be `olmocr`. An example vLLM launch command would be:
 ```bash
-vllm serve allenai/olmOCR-7B-1025-FP8 --served-model-name olmocr --max-model-len 16384
+vllm serve allenai/olmOCR-2-7B-1025-FP8 --served-model-name olmocr --max-model-len 16384
 ```
 
 #### Verified External Providers
 
-We have tested `olmOCR-7B-1025-FP8` on these external model providers and confirmed that they work
+We have tested `olmOCR-2-7B-1025-FP8` on these external model providers and confirmed that they work
 
 | Provider  | $/1M Input tokens | $/1M Output tokens | Example Command                                                                                                                                                            |
 |-----------|-------------------|--------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|

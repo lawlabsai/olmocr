@@ -1,6 +1,6 @@
 # olmOCR Training Guide
 
-This guide provides comprehensive instructions for training olmOCR models, including what you need to reproduce https://huggingface.co/allenai/olmOCR-7B-1025-FP8 on your own hardware.
+This guide provides comprehensive instructions for training olmOCR models, including what you need to reproduce https://huggingface.co/allenai/olmOCR-2-7B-1025-FP8 on your own hardware.
 
 ## Environment setup
 
@@ -73,12 +73,14 @@ python -m olmocr.data.prepare_olmocrmix --dataset-path allenai/olmOCR-mix-1025 -
 
 [olmOCR-7B-0825-FP8](https://huggingface.co/allenai/olmOCR-7B-0825-FP8) was trained with [qwen25_vl_olmocrv3_rotation_1epoch.yaml](/olmocr/train/configs/v0.3.0/qwen25_vl_olmocrv3_rotation_1epoch.yaml)
 
-[olmOCR-7B-1025-FP8](https://huggingface.co/allenai/olmOCR-7B-1025-FP8) was trained with [qwen25_vl_olmocrv4_rotation_1epoch_mix_1025_filtered.yaml](/olmocr/train/configs/v0.4.0/qwen25_vl_olmocrv4_rotation_1epoch_mix_1025_filtered.yaml)
+[olmOCR-2-7B-1025-FP8](https://huggingface.co/allenai/olmOCR-2-7B-1025-FP8) was trained with [qwen25_vl_olmocrv4_rotation_1epoch_mix_1025_filtered.yaml](/olmocr/train/configs/v0.4.0/qwen25_vl_olmocrv4_rotation_1epoch_mix_1025_filtered.yaml)
 
 
 This is setup to train on a single B200 GPU, and training will take around 24-48 hours (~$300 if renting). 
 
-But this is training for ~270,000 pages per epoch, so it's quite a big endeavour. We hope to add more options to make further finetuning your own small model more simple and easy.
+You may need to adjust the paths in the dataset section of the config to match where you downloaded and extracted the training mix. And also set the output_dir to a location where you would like to save checkpoints. 
+
+These configs train for ~270,000 pages per epoch, so it's quite a big endeavour. We hope to add more options to make further finetuning your own small model more simple and easy.
 
 ### Launch training job
 
@@ -104,14 +106,12 @@ python -m olmocr.train.compress_checkpoint --config olmocr/train/quantization_co
 
 ### GRPO Training
 
-[olmOCR-7B-1025-FP8](https://huggingface.co/allenai/olmOCR-7B-1025-FP8) adds an additional training step with GRPO RL based training
+[olmOCR-2-7B-1025-FP8](https://huggingface.co/allenai/olmOCR-2-7B-1025-FP8) adds an additional training step with GRPO RL based training
 occuring on a synthetic version of olmOCR-bench.
 
 [olmOCR-synthmix-1025](https://huggingface.co/datasets/allenai/olmOCR-synthmix-1025) was created by having Claude Sonnet take real PDF documents,
-then convert them into HTML templates. 
- Those HTML templates were then rendered, and converted into synthetic olmOCR-bench style benchmarks.
+then convert them into HTML templates. Those HTML templates were then rendered, and converted into synthetic olmOCR-bench style benchmarks.
 We then ran a GPRO based training process with a reward based on the benchmark score on this synthetic benchmark.
-
 
 You can use the following command to download the synthetic dataset:
 
@@ -121,19 +121,18 @@ hf download allenai/olmOCR-synthmix-1025 --repo-type dataset --local-dir olmOCR-
 
 This was generated using [mine_html_templates.py](olmocr/bench/synth/mine_html_templates.py), and is in the same format as other olmOCR-bench test cases. This means you can measure performance against these cases directly in the same way as running any other olmOCR-bench test suite.
 
-The following scripts show how to start training, which is performed on an 8xH100 GPU node. One GPU is dedicated to running VLLM, while the other 7 are used to run training.
+The following scripts show how to start training, which is performed on an 8xH100 GPU node. One GPU is dedicated to running VLLM, while the other 7 are used to run training. At the moment, this code is quite specialized to our cluster here, but we hope to make it easier to run elsewhere in future releases.
 
 ```bash
-
 ./scripts/train/grpotrainer-beaker-multi-gpu-augusta.sh --num-gpus 8      --model_name s3://ai2-oe-data/jakep/olmocr/qwen2.5-vl-7b-olmocrv4_1epoch_promptv4_mix1025_more_rotation-8372 --train_bench_data_folder /data/jakep/grpo_data_mixes/olmocr-synthmix-1025-v2-rotate10p/bench_data --reward_bench 1.0 --reward_front_matter 1.0 --reward_eos 1.0 --beta 0.01 --name promptv4_mix1025_more_rotation_multigpu_v1_beta_01_lr2e-6_frontmatter1_0_eos_28gen_synthmix-1025_rotate10p_finalrun1 --seed 1 --gradient_accumulation_steps 28 --learning_rate 2e-6 --preemptible
 
 ./scripts/train/grpotrainer-beaker-multi-gpu-augusta.sh --num-gpus 8      --model_name s3://ai2-oe-data/jakep/olmocr/qwen2.5-vl-7b-olmocrv4_1epoch_promptv4_mix1025_more_rotation-8372 --train_bench_data_folder /data/jakep/grpo_data_mixes/olmocr-synthmix-1025-v2-rotate10p/bench_data --reward_bench 1.0 --reward_front_matter 1.0 --reward_eos 1.0 --beta 0.01 --name promptv4_mix1025_more_rotation_multigpu_v1_beta_01_lr2e-6_frontmatter1_0_eos_28gen_synthmix-1025_rotate10p_importanceseq_finalrun1 --seed 1 --importance_sampling_level sequence --gradient_accumulation_steps 28 --learning_rate 2e-6 --preemptible
 ```
 
-6 seeds were run, 3 with importance sampling level=sequence, and 3 with importance sampling level=token, and then merged into a final checkpoint. This can be done by passing more arguments to the `prepare_checkpoint` script.
+6 seeds were run, 3 with importance sampling level=sequence, and 3 with importance sampling level=token, and then merged into a final checkpoint. Souping can be done by passing more arguments to the `prepare_checkpoint` script.
 
 ```bash
-# Final souping command for olmocr-7b-1025
+# Final souping command for olmocr-2-7b-1025
 python -m olmocr.train.prepare_checkpoint s3://ai2-oe-data/jakep/olmocr-grpo-checkpoints/promptv4_mix1025_more_rotation_multigpu_v1_beta_01_lr2e-6_frontmatter1_0_eos_28gen_synthmix-1025_rotate10p_finalrun1-multigpu-01K60YDRKCJY82TKF0FP6WE4VA/checkpoint-306/ s3://ai2-oe-data/jakep/olmocr-grpo-checkpoints/promptv4_mix1025_more_rotation_multigpu_v1_beta_01_lr2e-6_frontmatter1_0_eos_28gen_synthmix-1025_rotate10p_finalrun2-multigpu-01K60YGB5Y2G15BG8CX4H1QW23/checkpoint-306/ s3://ai2-oe-data/jakep/olmocr-grpo-checkpoints/promptv4_mix1025_more_rotation_multigpu_v1_beta_01_lr2e-6_frontmatter1_0_eos_28gen_synthmix-1025_rotate10p_finalrun3-multigpu-01K60YGM2QEKJK9FC94JJG5YDP/checkpoint-306/ s3://ai2-oe-data/jakep/olmocr-grpo-checkpoints/promptv4_mix1025_more_rotation_multigpu_v1_beta_01_lr2e-6_frontmatter1_0_eos_28gen_synthmix-1025_rotate10p_importanceseq_finalrun3-multigpu-01K60YJBGC3AR7STTNH23BWH8A/checkpoint-306/ s3://ai2-oe-data/jakep/olmocr-grpo-checkpoints/promptv4_mix1025_more_rotation_multigpu_v1_beta_01_lr2e-6_frontmatter1_0_eos_28gen_synthmix-1025_rotate10p_importanceseq_finalrun2-multigpu-01K60YJ315K1GYCPN8VADTN7C3/checkpoint-306/ s3://ai2-oe-data/jakep/olmocr-grpo-checkpoints/promptv4_mix1025_more_rotation_multigpu_v1_beta_01_lr2e-6_frontmatter1_0_eos_28gen_synthmix-1025_rotate10p_importanceseq_finalrun1-multigpu-01K60YHSHCNS9RZWSF9E56J9FB/checkpoint-306/ s3://ai2-oe-data/jakep/olmocr-grpo-checkpoints/promptv4_mix1025_more_rotation_multigpu_v1_beta_01_lr2e-6_frontmatter1_0_eos_28gen_synthmix-1025_rotate10p_soupersoup
 ```
 
