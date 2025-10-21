@@ -85,6 +85,8 @@ commands.extend([
     "python -m pip install https://paddle-whl.bj.bcebos.com/nightly/cu126/safetensors/safetensors-0.6.2.dev0-cp38-abi3-linux_x86_64.whl",
 
     "python -m olmocr.bench.convert paddlevl --dir ./olmOCR-bench/bench_data --parallel 0",
+    "pip install s5cmd",
+    "s5cmd cp olmOCR-bench/bench_data/ s3://ai2-oe-data/jakep/olmocr-bench-runs/$BEAKER_WORKLOAD_ID/",
     "python -m olmocr.bench.benchmark --dir ./olmOCR-bench/bench_data"
 ])
 
@@ -97,11 +99,11 @@ task_spec_args = {
         " && ".join(commands)
     ],
     "context": TaskContext(
-        priority=Priority.normal,
-        preemptible=True,
+        priority=Priority.urgent,
+        preemptible=False,
     ),
     "resources": TaskResources(gpu_count=1),
-    "constraints": Constraints(cluster=["ai2/neptune-cirrascale"]),
+    "constraints": Constraints(cluster=["ai2/jupiter"]),
     "result": ResultSpec(path="/noop-results"),
 }
 
