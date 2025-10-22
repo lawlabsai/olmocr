@@ -12,7 +12,7 @@
   <a href="https://olmocr.allenai.org/papers/olmocr.pdf">
     <img alt="Tech Report v1" src="https://img.shields.io/badge/Paper_v1-olmOCR-blue">
   </a>
-  <a href="https://github.com/allenai/olmocr/blob/main/olmOCR-2-Unit-Test-Rewards-for-Document-OCR.pdf">
+  <a href="https://raw.githubusercontent.com/allenai/olmocr/refs/heads/main/olmOCR-2-Unit-Test-Rewards-for-Document-OCR.pdf">
     <img alt="Tech Report v2" src="https://img.shields.io/badge/Paper_v2-olmOCR-blue">
   </a>
   <a href="https://olmocr.allenai.org">
