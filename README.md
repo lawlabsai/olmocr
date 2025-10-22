@@ -1,6 +1,5 @@
 <div align="center">
-  <!-- <img src="https://github.com/allenai/OLMo/assets/8812459/774ac485-a535-4768-8f7c-db7be20f5cc3" width="300"/> -->
-<img src="https://github.com/user-attachments/assets/d70c8644-3e64-4230-98c3-c52fddaeccb6" alt="olmOCR Logo" width="300"/>
+  <img width="350" alt="olmocr-2-full@2x" src="https://github.com/user-attachments/assets/24f1b596-4059-46f1-8130-5d72dcc0b02e" />
 <hr/>
 </div>
 <p align="center">
@@ -11,7 +10,10 @@
     <img alt="GitHub release" src="https://img.shields.io/github/release/allenai/olmocr.svg">
   </a>
   <a href="https://olmocr.allenai.org/papers/olmocr.pdf">
-    <img alt="Tech Report" src="https://img.shields.io/badge/Paper-olmOCR-blue">
+    <img alt="Tech Report v1" src="https://img.shields.io/badge/Paper_v1-olmOCR-blue">
+  </a>
+  <a href="https://raw.githubusercontent.com/allenai/olmocr/refs/heads/main/olmOCR-2-Unit-Test-Rewards-for-Document-OCR.pdf">
+    <img alt="Tech Report v2" src="https://img.shields.io/badge/Paper_v2-olmOCR-blue">
   </a>
   <a href="https://olmocr.allenai.org">
     <img alt="Demo" src="https://img.shields.io/badge/Ai2-Demo-F0529C">
