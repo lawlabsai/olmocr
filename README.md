@@ -35,6 +35,7 @@ Features:
  - (Based on a 7B parameter VLM, so it requires a GPU)
 
 ### News
+ - October 21, 2025 - v0.4.0 - [New model release](https://huggingface.co/allenai/olmOCR-2-7B-1025-FP8), boosts olmOCR-bench score by ~4 points using synthetic data and introduces RL training.
  - August 13, 2025 - v0.3.0 - [New model release](https://huggingface.co/allenai/olmOCR-7B-0825-FP8), fixes auto-rotation detection, and hallucinations on blank documents.
  - July 24, 2025 - v0.2.1 - [New model release](https://huggingface.co/allenai/olmOCR-7B-0725-FP8), scores 3 points higher on [olmOCR-Bench](https://github.com/allenai/olmocr/tree/main/olmocr/bench), also runs significantly faster because it's default FP8, and needs much fewer retries per document.
  - July 23, 2025 - v0.2.0 - New cleaned up [trainer code](https://github.com/allenai/olmocr/tree/main/olmocr/train), makes it much simpler to train olmOCR models yourself.
@@ -66,28 +67,28 @@ We also ship a comprehensive benchmark suite covering over 7,000 test cases acro
   </thead>
   <tbody>
     <tr>
-      <td align="left">Marker v1.7.5 (base, force_ocr)</td>
-      <td align="center">76.0</td>
-      <td align="center">57.9</td>
-      <td align="center">57.6</td>
-      <td align="center">27.8</td>
-      <td align="center">84.9</td>
+      <td align="left">Marker v1.10.1 (base, force_ocr)</td>
+      <td align="center"><strong>83.8</strong></td>
+      <td align="center">66.8</td>
       <td align="center">72.9</td>
-      <td align="center"><strong>84.6</strong></td>
-      <td align="center">99.1</td>
-      <td align="center">70.1 ± 1.1</td>
+      <td align="center">33.5</td>
+      <td align="center">86.6</td>
+      <td align="center">80.0</td>
+      <td align="center"><strong>85.7</strong></td>
+      <td align="center">99.3</td>
+      <td align="center">76.1 ± 1.1</td>
     </tr>
     <tr>
-      <td align="left">MinerU v1.3.10</td>
-      <td align="center">75.4</td>
-      <td align="center">47.4</td>
-      <td align="center">60.9</td>
-      <td align="center">17.3</td>
-      <td align="center"><strong>96.6</strong></td>
-      <td align="center">59.0</td>
-      <td align="center">39.1</td>
-      <td align="center">96.6</td>
-      <td align="center">61.5 ± 1.1</td>
+      <td align="left">MinerU v2.5.4</td>
+      <td align="center">75.5</td>
+      <td align="center">50.2</td>
+      <td align="center">59.9</td>
+      <td align="center">19.2</td>
+      <td align="center"><strong>97.0</strong></td>
+      <td align="center">58.7</td>
+      <td align="center">44.6</td>
+      <td align="center">97.8</td>
+      <td align="center">62.9 ± 1.1</td>
     </tr>
     <tr>
       <td align="left">Mistral OCR API</td>
@@ -115,20 +116,20 @@ We also ship a comprehensive benchmark suite covering over 7,000 test cases acro
     </tr>
     <tr>
       <td align="left">olmOCR v0.2.0</td>
-      <td align="center"><strong>78.8</strong></td>
+      <td align="center">78.8</td>
       <td align="center">77.5</td>
       <td align="center">71.9</td>
-      <td align="center"><strong>45.4</strong></td>
+      <td align="center">45.4</td>
       <td align="center">94.2</td>
-      <td align="center"><strong>78.6</strong></td>
+      <td align="center">78.6</td>
       <td align="center">81.4</td>
-      <td align="center"><strong>99.8</strong></td>
-      <td align="center"><strong>78.5 ± 1.1</strong></td>
+      <td align="center">99.8</td>
+      <td align="center">78.5 ± 1.1</td>
     </tr>
     <tr>
       <td align="left">olmOCR v0.3.0</td>
       <td align="center">78.6</td>
-      <td align="center"><strong>79.9</strong></td>
+      <td align="center">79.9</td>
       <td align="center">72.9</td>
       <td align="center">43.9</td>
       <td align="center">95.1</td>
@@ -136,7 +137,19 @@ We also ship a comprehensive benchmark suite covering over 7,000 test cases acro
       <td align="center">81.2</td>
       <td align="center">98.9</td>
       <td align="center">78.5 ± 1.1</td>
-    </tr>       
+    </tr>   
+    <tr>
+      <td align="left">olmOCR pipeline v0.4.0</td>
+      <td align="center"><strong>83.0</strong></td>
+      <td align="center"><strong>82.3</strong></td>
+      <td align="center"><strong>84.9</strong></td>
+      <td align="center"><strong>47.7</strong></td>
+      <td align="center">96.1</td>
+      <td align="center"><strong>83.7</strong></td>
+      <td align="center">81.9</td>
+      <td align="center">99.7</td>
+      <td align="center"><strong>82.4 ± 1.1</strong></td>
+    </tr>  
   </tbody>
 </table>
 
@@ -196,43 +209,6 @@ python -m olmocr.pipeline ./localworkspace --markdown --pdfs tests/gnarly_pdfs/*
 
 With the addition of the `--markdown` flag, results will be stored as markdown files inside of `./localworkspace/markdown/`. 
 
-### Using External vLLM Server
-
-If you have a vLLM server already running elsewhere (or any inference platform implementing the relevant subset of the OpenAI API), you can point olmOCR to use it instead of spawning a local instance:
-
-```bash
-# Use external vLLM server instead of local one
-python -m olmocr.pipeline ./localworkspace --server http://remote-server:8000 --markdown --pdfs tests/gnarly_pdfs/*.pdf
-```
-
-The served model name should be `olmocr`. An example vLLM launch command would be:
-```bash
-vllm serve allenai/olmOCR-7B-0825-FP8 --served-model-name olmocr --max-model-len 16384
-```
-
-#### Run olmOCR with the DeepInfra server endpoint:
-Signup at [DeepInfra](https://deepinfra.com/) and get your API key from the DeepInfra dashboard.
-Store the API key as an environment variable.
-```bash
-export DEEPINFRA_API_KEY="your-api-key-here"
-```
-
-```bash
-python -m olmocr.pipeline ./localworkspace \
-  --server https://api.deepinfra.com/v1/openai \
-  --api_key $DEEPINFRA_API_KEY \
-  --pages_per_group 100 \
-  --model allenai/olmOCR-7B-0825 \
-  --markdown \
-  --pdfs path/to/your/*.pdf
-```
-- `--server`: DeepInfra's OpenAI-compatible endpoint: `https://api.deepinfra.com/v1/openai`
-- `--api_key`: Your DeepInfra API key
-- `--pages_per_group`: You may want a smaller number of pages per group as many external provides have lower concurrent request limits
-- `--model`: The model identifier on DeepInfra: `allenai/olmOCR-7B-0825`
-- Other arguments work the same as with local inference
-
-
 #### Viewing Results
 
 The `./localworkspace/` workspace folder will then have both [Dolma](https://github.com/allenai/dolma) and markdown files (if using `--markdown`).
@@ -246,6 +222,38 @@ cat localworkspace/markdown/olmocr-sample.md
 olmOCR: Unlocking Trillions of Tokens in PDFs with Vision Language Models
 ...
 ```
+
+### Using an Inference Provider or External Server
+
+If you have a vLLM server already running elsewhere (or any inference platform implementing the OpenAI API), you can point olmOCR to use it instead of spawning a local instance:
+
+```bash
+# Use external vLLM server instead of local one
+python -m olmocr.pipeline ./localworkspace --server http://remote-server:8000/v1 --markdown --pdfs tests/gnarly_pdfs/*.pdf
+```
+
+The served model name should be `olmocr`. An example vLLM launch command would be:
+```bash
+vllm serve allenai/olmOCR-2-7B-1025-FP8 --served-model-name olmocr --max-model-len 16384
+```
+
+#### Verified External Providers
+
+We have tested `olmOCR-2-7B-1025-FP8` on these external model providers and confirmed that they work
+
+| Provider  | $/1M Input tokens | $/1M Output tokens | Example Command                                                                                                                                                            |
+|-----------|-------------------|--------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [DeepInfra](https://deepinfra.com/) | $0.14             | $0.80              | `python -m olmocr.pipeline ./localworkspace1 --server https://api.deepinfra.com/v1/openai --api_key DfXXXXXXX --model allenai/olmOCR-7B-1025 --pdfs tests/gnarly_pdfs/*.pdf` |
+| [Parasail](https://www.saas.parasail.io/serverless?name=olmocr-7b-1025-fp8)  | $0.10             | $0.20              | `python -m olmocr.pipeline ./localworkspace1 --server https://api.parasail.io/v1 --api_key psk-XXXXX --model parasail-olmocr-7b-1025-fp8 --pdfs tests/gnarly_pdfs/*.pdf`              |
+|           |                   |                    |                                                                                                                                                                            |
+
+Notes on arguments
+- `--server`: Defines the OpenAI-compatible endpoint: ex `https://api.deepinfra.com/v1/openai`
+- `--api_key`: Your API key, bassed in via Authorization Bearer HTTP header
+- `--pages_per_group`: You may want a smaller number of pages per group as many external provides have lower concurrent request limits
+- `--model`: The model identifier, ex. `allenai/olmOCR-7B-1025`, different providers have different names, and if you run locally, you can use `olmocr`
+- Other arguments work the same as with local inference
+
 
 ### Multi-node / Cluster Usage
 
@@ -371,10 +379,11 @@ beaker/cluster execution:
 
 There are some nice reusable pieces of the code that may be useful for your own projects:
  - A prompting strategy to get really good natural text parsing using ChatGPT 4o - [buildsilver.py](https://github.com/allenai/olmocr/blob/main/olmocr/data/buildsilver.py)
- - An side-by-side eval toolkit for comparing different pipeline versions - [runeval.py](https://github.com/allenai/olmocr/blob/main/olmocr/eval/runeval.py)
  - Basic filtering by language and SEO spam removal - [filter.py](https://github.com/allenai/olmocr/blob/main/olmocr/filter/filter.py)
- - Finetuning code for Qwen2-VL and Molmo-O - [train.py](https://github.com/allenai/olmocr/blob/main/olmocr/train/train.py)
- - Processing millions of PDFs through a finetuned model using Sglang - [pipeline.py](https://github.com/allenai/olmocr/blob/main/olmocr/pipeline.py)
+ - SFT Finetuning code for Qwen2.5-VL - [train.py](https://github.com/allenai/olmocr/blob/main/olmocr/train/train.py)
+ - GRPO RL Trainer - [grpo_train.py](https://github.com/allenai/olmocr/blob/main/olmocr/train/grpo_train.py)
+ - Synthetic data generation - [mine_html_templates.py](https://github.com/allenai/olmocr/blob/main/olmocr/bench/synth/mine_html_templates.py)
+ - Processing millions of PDFs through a finetuned model using VLLM - [pipeline.py](https://github.com/allenai/olmocr/blob/main/olmocr/pipeline.py)
  - Viewing [Dolma docs](https://github.com/allenai/dolma) created from PDFs - [dolmaviewer.py](https://github.com/allenai/olmocr/blob/main/olmocr/viewer/dolmaviewer.py)
 
 

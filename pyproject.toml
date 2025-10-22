@@ -38,7 +38,6 @@ dependencies = [
   "httpx",
   "torch>=2.7.0",
   "transformers==4.55.2",
-  "img2pdf",
   "beaker-py",
 ]
 license = {file = "LICENSE"}
@@ -89,6 +88,7 @@ bench = [
     "syntok",
     "openai",
     "google-genai",
+    "anthropic",
     "playwright",
     "mistralai",
     "lxml",
@@ -192,3 +192,4 @@ log_level = "DEBUG"
 markers = [
     "nonci: mark test as not intended for CI runs"
 ]
+addopts = "-m 'not nonci'"
