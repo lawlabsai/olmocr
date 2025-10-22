@@ -30,6 +30,7 @@ dependencies = [
   "ftfy",
   "bleach",
   "markdown2",
+  "markdownify",
   "filelock",
   "orjson",
   "requests",
@@ -78,6 +79,7 @@ dev = [
     "datasets",
     "omegaconf",
     "spacy",
+    "wandb",
 ]
 
 bench = [
