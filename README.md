@@ -1,6 +1,5 @@
 <div align="center">
-  <!-- <img src="https://github.com/allenai/OLMo/assets/8812459/774ac485-a535-4768-8f7c-db7be20f5cc3" width="300"/> -->
-<img src="https://github.com/user-attachments/assets/d70c8644-3e64-4230-98c3-c52fddaeccb6" alt="olmOCR Logo" width="300"/>
+  <img width="350" alt="olmocr-2-full@2x" src="https://github.com/user-attachments/assets/24f1b596-4059-46f1-8130-5d72dcc0b02e" />
 <hr/>
 </div>
 <p align="center">
