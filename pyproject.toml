@@ -80,6 +80,7 @@ dev = [
     "omegaconf",
     "spacy",
     "wandb",
+    "trl",
 ]
 
 bench = [
@@ -101,6 +102,7 @@ train = [
     "torch",
     "torchvision",
     "accelerate",
+    "trl",
     "peft",
     "wandb",
     "omegaconf",
