@@ -10,7 +10,10 @@
     <img alt="GitHub release" src="https://img.shields.io/github/release/allenai/olmocr.svg">
   </a>
   <a href="https://olmocr.allenai.org/papers/olmocr.pdf">
-    <img alt="Tech Report" src="https://img.shields.io/badge/Paper-olmOCR-blue">
+    <img alt="Tech Report v1" src="https://img.shields.io/badge/Paper_v1-olmOCR-blue">
+  </a>
+  <a href="https://github.com/allenai/olmocr/blob/main/olmOCR-2-Unit-Test-Rewards-for-Document-OCR.pdf">
+    <img alt="Tech Report v2" src="https://img.shields.io/badge/Paper_v2-olmOCR-blue">
   </a>
   <a href="https://olmocr.allenai.org">
     <img alt="Demo" src="https://img.shields.io/badge/Ai2-Demo-F0529C">
