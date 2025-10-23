@@ -168,67 +168,7 @@ We also ship a comprehensive benchmark suite covering over 7,000 test cases acro
             <td colspan="10"><hr></td>
         </tr>
         <tr>
-            <td>olmOCR (first release)</td>
-            <td>63.3</td>
-            <td>67.5</td>
-            <td>62.3</td>
-            <td>38.6</td>
-            <td>93.4</td>
-            <td>67.6</td>
-            <td>54.8</td>
-            <td>97.9</td>
-            <td>68.2±1.1</td>
-        </tr>
-        <tr>
-            <td>v0.1.60 + Dynamic temp scaling</td>
-            <td>71.4</td>
-            <td>73.1</td>
-            <td>65.6</td>
-            <td>40.5</td>
-            <td>93.2</td>
-            <td>76.6</td>
-            <td>64.9</td>
-            <td>96.7</td>
-            <td>72.8±1.2</td>
-        </tr>
-        <tr>
-            <td>v0.1.68 + Better prompting</td>
-            <td>76.3</td>
-            <td>76.0</td>
-            <td>70.2</td>
-            <td>43.2</td>
-            <td>94.1</td>
-            <td>77.5</td>
-            <td>71.9</td>
-            <td>96.8</td>
-            <td>75.8±1.0</td>
-        </tr>
-        <tr>
-            <td>v0.2.0 + New trainer, YAML, img resize, Qwen 2.5 VL</td>
-            <td>78.8</td>
-            <td>77.5</td>
-            <td>71.9</td>
-            <td>45.4</td>
-            <td>94.2</td>
-            <td>78.6</td>
-            <td>81.4</td>
-            <td>99.8</td>
-            <td>78.5±1.1</td>
-        </tr>
-        <tr>
-            <td>v0.3.0 + Handle blank pages</td>
-            <td>78.6</td>
-            <td>79.9</td>
-            <td>72.9</td>
-            <td>43.9</td>
-            <td>95.1</td>
-            <td>77.3</td>
-            <td>81.2</td>
-            <td>98.9</td>
-            <td>78.5±1.1</td>
-        </tr>
-        <tr>
-            <td>v0.4.0 + Synth data, RLVR, souping</td>
+            <td>olmOCR v0.4.0</td>
             <td>83.0</td>
             <td>82.3</td>
             <td>84.9</td>
