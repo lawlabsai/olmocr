@@ -9,10 +9,10 @@
   <a href="https://github.com/allenai/olmocr/releases">
     <img alt="GitHub release" src="https://img.shields.io/github/release/allenai/olmocr.svg">
   </a>
-  <a href="https://olmocr.allenai.org/papers/olmocr.pdf">
+  <a href="https://arxiv.org/abs/2502.18443">
     <img alt="Tech Report v1" src="https://img.shields.io/badge/Paper_v1-olmOCR-blue">
   </a>
-  <a href="https://raw.githubusercontent.com/allenai/olmocr/refs/heads/main/olmOCR-2-Unit-Test-Rewards-for-Document-OCR.pdf">
+  <a href="https://arxiv.org/abs/2510.19817">
     <img alt="Tech Report v2" src="https://img.shields.io/badge/Paper_v2-olmOCR-blue">
   </a>
   <a href="https://olmocr.allenai.org">
@@ -411,8 +411,9 @@ A full copy of the license can be found [on GitHub](https://github.com/allenai/o
 
 ## Citing
 
+For olmOCR v1 and OlmOCR-bench:
 ```bibtex
-@misc{olmocr,
+@misc{olmocrbench,
       title={{olmOCR: Unlocking Trillions of Tokens in PDFs with Vision Language Models}},
       author={Jake Poznanski and Jon Borchardt and Jason Dunkelberger and Regan Huff and Daniel Lin and Aman Rangapur and Christopher Wilhelm and Kyle Lo and Luca Soldaini},
       year={2025},
@@ -420,5 +421,18 @@ A full copy of the license can be found [on GitHub](https://github.com/allenai/o
       archivePrefix={arXiv},
       primaryClass={cs.CL},
       url={https://arxiv.org/abs/2502.18443},
+}
+```
+
+For olmOCR v2 Unit Testing Rewards with RL:
+```bibtex
+@misc{olmocr2,
+      title={olmOCR 2: Unit Test Rewards for Document OCR}, 
+      author={Jake Poznanski and Luca Soldaini and Kyle Lo},
+      year={2025},
+      eprint={2510.19817},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2510.19817}, 
 }
 ```
