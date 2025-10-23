@@ -21,244 +21,196 @@ to run it against your own OCR tools. Your tool just needs to support Markdown o
 ## Results
 
 <table>
-  <thead>
-    <tr>
-      <th align="left"><strong>Model</strong></th>
-      <th align="center">ArXiv</th>
-      <th align="center">Old Scans Math</th>
-      <th align="center">Tables</th>
-      <th align="center">Old Scans</th>
-      <th align="center">Headers and Footers</th>
-      <th align="center">Multi column</th>
-      <th align="center">Long tiny text</th>
-      <th align="center">Base</th>
-      <th align="center">Overall</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td align="left">GOT OCR</td>
-      <td align="center">52.7</td>
-      <td align="center">52.0</td>
-      <td align="center">0.20</td>
-      <td align="center">22.1</td>
-      <td align="center">93.6</td>
-      <td align="center">42.0</td>
-      <td align="center">29.9</td>
-      <td align="center">94.0</td>
-      <td align="center">48.3 ± 1.1</td>
-    </tr>
-    <tr>
-      <td align="left">Marker v1.10.1 (base, force_ocr)</td>
-      <td align="center"><strong>83.8</strong></td>
-      <td align="center">66.8</td>
-      <td align="center">72.9</td>
-      <td align="center">33.5</td>
-      <td align="center">86.6</td>
-      <td align="center">80.0</td>
-      <td align="center"><strong>85.7</strong></td>
-      <td align="center">99.3</td>
-      <td align="center">76.1 ± 1.1</td>
-    </tr>
-    <!-- <tr>
-      <td align="left">Marker v1.7.5 (base, force_ocr)</td>
-      <td align="center">76.0</td>
-      <td align="center">57.9</td>
-      <td align="center">57.6</td>
-      <td align="center">27.8</td>
-      <td align="center">84.9</td>
-      <td align="center">72.9</td>
-      <td align="center"><strong>84.6</strong></td>
-      <td align="center">99.1</td>
-      <td align="center">70.1 ± 1.1</td>
-    </tr> -->
-    <tr>
-      <td align="left">MinerU v2.5.4</td>
-      <td align="center">75.5</td>
-      <td align="center">50.2</td>
-      <td align="center">59.9</td>
-      <td align="center">19.2</td>
-      <td align="center"><strong>97.0</strong></td>
-      <td align="center">58.7</td>
-      <td align="center">44.6</td>
-      <td align="center">97.8</td>
-      <td align="center">62.9 ± 1.1</td>
-    </tr>
-    <!-- <tr>
-      <td align="left">MinerU v1.3.10</td>
-      <td align="center">75.4</td>
-      <td align="center">47.4</td>
-      <td align="center">60.9</td>
-      <td align="center">17.3</td>
-      <td align="center"><strong>96.6</strong></td>
-      <td align="center">59.0</td>
-      <td align="center">39.1</td>
-      <td align="center">96.6</td>
-      <td align="center">61.5 ± 1.1</td>
-    </tr> -->
-    <tr>
-      <td align="left">Mistral OCR API</td>
-      <td align="center">77.2</td>
-      <td align="center">67.5</td>
-      <td align="center">60.6</td>
-      <td align="center">29.3</td>
-      <td align="center">93.6</td>
-      <td align="center">71.3</td>
-      <td align="center">77.1</td>
-      <td align="center">99.4</td>
-      <td align="center">72.0 ± 1.1</td>
-    </tr>
-    <tr>
-      <td align="left">Nanonets OCR</td>
-      <td align="center">67.0</td>
-      <td align="center">68.6</td>
-      <td align="center">77.7</td>
-      <td align="center">39.5</td>
-      <td align="center">40.7</td>
-      <td align="center">69.9</td>
-      <td align="center">53.4</td>
-      <td align="center">99.3</td>
-      <td align="center">64.5 ± 1.1</td>
-    </tr>
-    <tr>
-      <td align="left">GPT-4o (No Anchor)</td>
-      <td align="center">51.5</td>
-      <td align="center">75.5</td>
-      <td align="center">69.1</td>
-      <td align="center">40.9</td>
-      <td align="center">94.2</td>
-      <td align="center">68.9</td>
-      <td align="center">54.1</td>
-      <td align="center">96.7</td>
-      <td align="center">68.9 ± 1.1</td>
-    </tr>
-    <tr>
-      <td align="left">GPT-4o (Anchored)</td>
-      <td align="center">53.5</td>
-      <td align="center">74.5</td>
-      <td align="center">70.0</td>
-      <td align="center">40.7</td>
-      <td align="center">93.8</td>
-      <td align="center">69.3</td>
-      <td align="center">60.6</td>
-      <td align="center">96.8</td>
-      <td align="center">69.9 ± 1.1</td>
-    </tr>
-    <tr>
-      <td align="left">Gemini Flash 2 (No Anchor)</td>
-      <td align="center">32.1</td>
-      <td align="center">56.3</td>
-      <td align="center">61.4</td>
-      <td align="center">27.8</td>
-      <td align="center">48.0</td>
-      <td align="center">58.7</td>
-      <td align="center">84.4</td>
-      <td align="center">94.0</td>
-      <td align="center">57.8 ± 1.1</td>
-    </tr>
-    <tr>
-      <td align="left">Gemini Flash 2 (Anchored)</td>
-      <td align="center">54.5</td>
-      <td align="center">56.1</td>
-      <td align="center">72.1</td>
-      <td align="center">34.2</td>
-      <td align="center">64.7</td>
-      <td align="center">61.5</td>
-      <td align="center">71.5</td>
-      <td align="center">95.6</td>
-      <td align="center">63.8 ± 1.2</td>
-    </tr>
-    <tr>
-      <td align="left">Qwen 2 VL (No Anchor)</td>
-      <td align="center">19.7</td>
-      <td align="center">31.7</td>
-      <td align="center">24.2</td>
-      <td align="center">17.1</td>
-      <td align="center">88.9</td>
-      <td align="center">8.3</td>
-      <td align="center">6.8</td>
-      <td align="center">55.5</td>
-      <td align="center">31.5 ± 0.9</td>
-    </tr>
-    <tr>
-      <td align="left">Qwen 2.5 VL (No Anchor)</td>
-      <td align="center">63.1</td>
-      <td align="center">65.7</td>
-      <td align="center">67.3</td>
-      <td align="center">38.6</td>
-      <td align="center">73.6</td>
-      <td align="center">68.3</td>
-      <td align="center">49.1</td>
-      <td align="center">98.3</td>
-      <td align="center">65.5 ± 1.2</td>
-    </tr>
-    <tr>
-      <td align="left">olmOCR v0.1.75 (No Anchor)</td>
-      <td align="center">71.5</td>
-      <td align="center">71.4</td>
-      <td align="center">71.4</td>
-      <td align="center">42.8</td>
-      <td align="center">94.1</td>
-      <td align="center">77.7</td>
-      <td align="center">71.0</td>
-      <td align="center">97.8</td>
-      <td align="center">74.7 ± 1.1</td>
-    </tr>
-    <tr>
-      <td align="left">olmOCR v0.1.75 (Anchored)</td>
-      <td align="center">74.9</td>
-      <td align="center">71.2</td>
-      <td align="center">71.0</td>
-      <td align="center">42.2</td>
-      <td align="center">94.5</td>
-      <td align="center">78.3</td>
-      <td align="center">73.3</td>
-      <td align="center">98.3</td>
-      <td align="center">75.5 ± 1.0</td>
-    </tr>
-    <tr>
-      <td align="left">olmOCR v0.2.0</td>
-      <td align="center">78.8</td>
-      <td align="center">77.5</td>
-      <td align="center">71.9</td>
-      <td align="center">45.4</td>
-      <td align="center">94.2</td>
-      <td align="center">78.6</td>
-      <td align="center">81.4</td>
-      <td align="center"><strong>99.8</strong></td>
-      <td align="center">78.5 ± 1.1</td>
-    </tr>
-    <tr>
-      <td align="left">olmOCR v0.3.0</td>
-      <td align="center">78.6</td>
-      <td align="center">79.9</td>
-      <td align="center">72.9</td>
-      <td align="center">43.9</td>
-      <td align="center">95.1</td>
-      <td align="center">77.3</td>
-      <td align="center">81.2</td>
-      <td align="center">98.9</td>
-      <td align="center">78.5 ± 1.1</td>
-    </tr>   
-    <tr>
-      <td align="left">olmOCR pipeline v0.4.0</td>
-      <td align="center">83.0</td>
-      <td align="center"><strong>82.3</strong></td>
-      <td align="center"><strong>84.9</strong></td>
-      <td align="center"><strong>47.7</strong></td>
-      <td align="center">96.1</td>
-      <td align="center"><strong>83.7</strong></td>
-      <td align="center">81.9</td>
-      <td align="center">99.7</td>
-      <td align="center"><strong>82.4 ± 1.1</strong></td>
-    </tr>  
-  </tbody>
+    <thead>
+        <tr>
+            <th></th>
+            <th>ArXiv</th>
+            <th>Old<br>scans<br>math</th>
+            <th>Tables</th>
+            <th>Old<br>scans</th>
+            <th>Headers<br>&<br>footers</th>
+            <th>Multi<br>column</th>
+            <th>Long<br>tiny<br>text</th>
+            <th>Base</th>
+            <th>Overall</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>Mistral OCR API</td>
+            <td>77.2</td>
+            <td>67.5</td>
+            <td>60.6</td>
+            <td>29.3</td>
+            <td>93.6</td>
+            <td>71.3</td>
+            <td>77.1</td>
+            <td>99.4</td>
+            <td>72.0±1.1</td>
+        </tr>
+        <tr>
+            <td>Marker 1.10.1</td>
+            <td>83.8</td>
+            <td>66.8</td>
+            <td>72.9</td>
+            <td>33.5</td>
+            <td>86.6</td>
+            <td>80.0</td>
+            <td>85.7</td>
+            <td>99.3</td>
+            <td>76.1±1.1</td>
+        </tr>
+        <tr>
+            <td>MinerU 2.5.4*</td>
+            <td>76.6</td>
+            <td>54.6</td>
+            <td>84.9</td>
+            <td>33.7</td>
+            <td>96.6</td>
+            <td>78.2</td>
+            <td>83.5</td>
+            <td>93.7</td>
+            <td>75.2±1.1</td>
+        </tr>
+        <tr>
+            <td>DeepSeek-OCR</td>
+            <td>77.2</td>
+            <td>73.6</td>
+            <td>80.2</td>
+            <td>33.3</td>
+            <td>96.1</td>
+            <td>66.4</td>
+            <td>79.4</td>
+            <td>99.8</td>
+            <td>75.7±1.0</td>
+        </tr>
+        <tr>
+            <td>Nanonets-OCR2-3B</td>
+            <td>75.4</td>
+            <td>46.1</td>
+            <td>86.8</td>
+            <td>40.9</td>
+            <td>32.1</td>
+            <td>81.9</td>
+            <td>93.0</td>
+            <td>99.6</td>
+            <td>69.5±1.1</td>
+        </tr>
+        <tr>
+            <td>PaddleOCR-VL*</td>
+            <td>85.7</td>
+            <td>71.0</td>
+            <td>84.1</td>
+            <td>37.8</td>
+            <td>97.0</td>
+            <td>79.9</td>
+            <td>85.7</td>
+            <td>98.5</td>
+            <td>80.0±1.0</td>
+        </tr>
+        <tr>
+            <td>Infinity-Parser 7B*</td>
+            <td>84.4</td>
+            <td>83.8</td>
+            <td>85.0</td>
+            <td>47.9</td>
+            <td>88.7</td>
+            <td>84.2</td>
+            <td>86.4</td>
+            <td>99.8</td>
+            <td>82.5±?</td>
+        </tr>
+        <tr>
+            <td>Chandra OCR 0.1.0*</td>
+            <td>82.2</td>
+            <td>80.3</td>
+            <td>88.0</td>
+            <td>50.4</td>
+            <td>90.8</td>
+            <td>81.2</td>
+            <td>92.3</td>
+            <td>99.9</td>
+            <td>83.1±0.9</td>
+        </tr>
+        <tr>
+            <td colspan="10"><hr></td>
+        </tr>
+        <tr>
+            <td>olmOCR (first release)</td>
+            <td>63.3</td>
+            <td>67.5</td>
+            <td>62.3</td>
+            <td>38.6</td>
+            <td>93.4</td>
+            <td>67.6</td>
+            <td>54.8</td>
+            <td>97.9</td>
+            <td>68.2±1.1</td>
+        </tr>
+        <tr>
+            <td>v0.1.60 + Dynamic temp scaling</td>
+            <td>71.4</td>
+            <td>73.1</td>
+            <td>65.6</td>
+            <td>40.5</td>
+            <td>93.2</td>
+            <td>76.6</td>
+            <td>64.9</td>
+            <td>96.7</td>
+            <td>72.8±1.2</td>
+        </tr>
+        <tr>
+            <td>v0.1.68 + Better prompting</td>
+            <td>76.3</td>
+            <td>76.0</td>
+            <td>70.2</td>
+            <td>43.2</td>
+            <td>94.1</td>
+            <td>77.5</td>
+            <td>71.9</td>
+            <td>96.8</td>
+            <td>75.8±1.0</td>
+        </tr>
+        <tr>
+            <td>v0.2.0 + New trainer, YAML, img resize, Qwen 2.5 VL</td>
+            <td>78.8</td>
+            <td>77.5</td>
+            <td>71.9</td>
+            <td>45.4</td>
+            <td>94.2</td>
+            <td>78.6</td>
+            <td>81.4</td>
+            <td>99.8</td>
+            <td>78.5±1.1</td>
+        </tr>
+        <tr>
+            <td>v0.3.0 + Handle blank pages</td>
+            <td>78.6</td>
+            <td>79.9</td>
+            <td>72.9</td>
+            <td>43.9</td>
+            <td>95.1</td>
+            <td>77.3</td>
+            <td>81.2</td>
+            <td>98.9</td>
+            <td>78.5±1.1</td>
+        </tr>
+        <tr>
+            <td>v0.4.0 + Synth data, RLVR, souping</td>
+            <td>83.0</td>
+            <td>82.3</td>
+            <td>84.9</td>
+            <td>47.7</td>
+            <td>96.1</td>
+            <td>83.7</td>
+            <td>81.9</td>
+            <td>99.7</td>
+            <td>82.4±1.1</td>
+        </tr>
+    </tbody>
 </table>
 
-<sup><sub>There was a small drop in scores from olmOCR v0.1.68 (77.4), which is due to two factors. One, is that we have adjusted our benchmark code to not include
-any "fallback" mechanism when measuring benchmark scores (though it still exists when you run olmocr.pipeline). Second, there is a small drop in scores as we have updated
-from sglang 0.4.2 to vllm 0.9.1. In net, we think the upgrade to vllm is the right choice, given that sglang 0.4.6 had even lower scores by one point, and vllm comes with a 
-small performance boost, and great support for quantization.
+<sup><sub>Results are reproduced in-house, except those marked with *, which are reported by model authors.
 </sub></sup>
 
 ## Sourcing Documents and Tests
