@@ -272,7 +272,7 @@ We have tested `olmOCR-2-7B-1025-FP8` on these external model providers and conf
 
 | Provider  | $/1M Input tokens | $/1M Output tokens | Example Command                                                                                                                                                            |
 |-----------|-------------------|--------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [DeepInfra](https://deepinfra.com/) | $0.14             | $0.80              | `python -m olmocr.pipeline ./localworkspace1 --server https://api.deepinfra.com/v1/openai --api_key DfXXXXXXX --model allenai/olmOCR-2-7B-1025 --pdfs tests/gnarly_pdfs/*.pdf` |
+| [DeepInfra](https://deepinfra.com/) | $0.09             | $0.19              | `python -m olmocr.pipeline ./localworkspace1 --server https://api.deepinfra.com/v1/openai --api_key DfXXXXXXX --model allenai/olmOCR-2-7B-1025 --pdfs tests/gnarly_pdfs/*.pdf` |
 | [Parasail](https://www.saas.parasail.io/serverless?name=olmocr-7b-1025-fp8)  | $0.10             | $0.20              | `python -m olmocr.pipeline ./localworkspace1 --server https://api.parasail.io/v1 --api_key psk-XXXXX --model allenai/olmOCR-2-7B-1025 --pdfs tests/gnarly_pdfs/*.pdf`              |
 |           |                   |                    |                                                                                                                                                                            |
 
