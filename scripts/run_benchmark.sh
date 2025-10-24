@@ -5,25 +5,30 @@
 #   ./scripts/run_benchmark.sh
 #  With model parameter: for testing custom models
 #   ./scripts/run_benchmark.sh --model your-model-name
+#  With cluster parameter: specify a specific cluster to use
+#   ./scripts/run_benchmark.sh --cluster ai2/titan-cirrascale
 #  With beaker image: skip Docker build and use provided Beaker image
 #   ./scripts/run_benchmark.sh --beaker-image jakep/olmocr-benchmark-0.3.3-780bc7d934
+#  With repeats parameter: run the pipeline multiple times for increased accuracy (default: 1)
+#   ./scripts/run_benchmark.sh --repeats 3
 
 set -e
 
 # Parse command line arguments
 MODEL=""
-B200_MODE=""
+CLUSTER=""
 BENCH_BRANCH=""
 BEAKER_IMAGE=""
+REPEATS="1"
 while [[ $# -gt 0 ]]; do
     case $1 in
         --model)
             MODEL="$2"
             shift 2
             ;;
-        --b200)
-            B200_MODE="true"
-            shift
+        --cluster)
+            CLUSTER="$2"
+            shift 2
             ;;
         --benchbranch)
             BENCH_BRANCH="$2"
@@ -33,9 +38,13 @@ while [[ $# -gt 0 ]]; do
             BEAKER_IMAGE="$2"
             shift 2
             ;;
+        --repeats)
+            REPEATS="$2"
+            shift 2
+            ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 [--model MODEL_NAME] [--b200] [--benchbranch BRANCH_NAME] [--beaker-image IMAGE_NAME]"
+            echo "Usage: $0 [--model MODEL_NAME] [--cluster CLUSTER_NAME] [--benchbranch BRANCH_NAME] [--beaker-image IMAGE_NAME] [--repeats NUMBER]"
             exit 1
             ;;
     esac
@@ -105,23 +114,27 @@ cat << 'EOF' > /tmp/run_benchmark_experiment.py
 import sys
 from beaker import Beaker, ExperimentSpec, TaskSpec, TaskContext, ResultSpec, TaskResources, ImageSource, Priority, Constraints, EnvVar
 
-# Get image tag, beaker user, git branch, git hash, optional model, b200 mode, and bench branch from command line
+# Get image tag, beaker user, git branch, git hash, optional model, cluster, bench branch, and repeats from command line
 image_tag = sys.argv[1]
 beaker_user = sys.argv[2]
 git_branch = sys.argv[3]
 git_hash = sys.argv[4]
 model = None
-b200_mode = False
+cluster = None
 bench_branch = None
+repeats = 1
 
 # Parse remaining arguments
 arg_idx = 5
 while arg_idx < len(sys.argv):
-    if sys.argv[arg_idx] == "--b200":
-        b200_mode = True
-        arg_idx += 1
+    if sys.argv[arg_idx] == "--cluster":
+        cluster = sys.argv[arg_idx + 1]
+        arg_idx += 2
     elif sys.argv[arg_idx] == "--benchbranch":
         bench_branch = sys.argv[arg_idx + 1]
+        arg_idx += 2
+    elif sys.argv[arg_idx] == "--repeats":
+        repeats = int(sys.argv[arg_idx + 1])
         arg_idx += 2
     else:
         model = sys.argv[arg_idx]
@@ -130,10 +143,7 @@ while arg_idx < len(sys.argv):
 # Initialize Beaker client
 b = Beaker.from_env(default_workspace="ai2/olmocr")
 
-# Build the pipeline command with optional model parameter
-pipeline_cmd = "python -m olmocr.pipeline ./localworkspace --markdown --pdfs ./olmOCR-bench/bench_data/pdfs/**/*.pdf"
-if model:
-    pipeline_cmd += f" --model {model}"
+# Note: pipeline commands will be built in the loop based on repeats
 
 # Check if AWS credentials secret exists
 aws_creds_secret = f"{beaker_user}-AWS_CREDENTIALS_FILE"
@@ -162,12 +172,33 @@ if bench_branch:
 commands.extend([
     git_clone_cmd,
     "cd olmOCR-bench && git lfs pull && cd ..",
-    pipeline_cmd,
-    "python olmocr/bench/scripts/workspace_to_bench.py localworkspace/ olmOCR-bench/bench_data/olmocr --bench-path ./olmOCR-bench/",
-    "pip install s5cmd",
-    "s5cmd cp localworkspace/ s3://ai2-oe-data/jakep/olmocr-bench-runs/$BEAKER_WORKLOAD_ID/",
-    "python -m olmocr.bench.benchmark --dir ./olmOCR-bench/bench_data"
 ])
+
+# Run pipeline multiple times based on repeats
+for i in range(1, repeats + 1):
+    workspace_dir = f"./localworkspace{i}"
+    pipeline_cmd = f"python -m olmocr.pipeline {workspace_dir} --markdown --pdfs ./olmOCR-bench/bench_data/pdfs/**/*.pdf"
+    if model:
+        pipeline_cmd += f" --model {model}"
+    commands.append(pipeline_cmd)
+
+# Process all workspaces with workspace_to_bench.py
+for i in range(1, repeats + 1):
+    workspace_dir = f"localworkspace{i}/"
+    workspace_to_bench_cmd = f"python olmocr/bench/scripts/workspace_to_bench.py {workspace_dir} olmOCR-bench/bench_data/olmocr --bench-path ./olmOCR-bench/ --repeat-index {i}"
+    commands.append(workspace_to_bench_cmd)
+
+# Copy all workspaces to S3 and run benchmark
+commands.extend([
+    "pip install s5cmd",
+])
+
+# Copy each workspace to S3
+for i in range(1, repeats + 1):
+    workspace_dir = f"localworkspace{i}/"
+    commands.append(f"s5cmd cp {workspace_dir} s3://ai2-oe-data/jakep/olmocr-bench-runs/$BEAKER_WORKLOAD_ID/workspace{i}/")
+
+commands.append("python -m olmocr.bench.benchmark --dir ./olmOCR-bench/bench_data")
 
 # Build task spec with optional env vars
 # If image_tag contains '/', it's already a full beaker image reference
@@ -188,7 +219,7 @@ task_spec_args = {
         preemptible=True,
     ),
     "resources": TaskResources(gpu_count=1),
-    "constraints": Constraints(cluster=["ai2/titan-cirrascale"] if b200_mode else ["ai2/ceres-cirrascale", "ai2/jupiter-cirrascale-2"]),
+    "constraints": Constraints(cluster=[cluster] if cluster else ["ai2/ceres-cirrascale", "ai2/jupiter-cirrascale-2"]),
     "result": ResultSpec(path="/noop-results"),
 }
 
@@ -213,7 +244,7 @@ print("-------")
 print("")
 
 # Second experiment: Performance test job
-perf_pipeline_cmd = "python -m olmocr.pipeline ./localworkspace --markdown --pdfs s3://ai2-oe-data/jakep/olmocr/olmOCR-mix-0225/benchmark_set/*.pdf"
+perf_pipeline_cmd = "python -m olmocr.pipeline ./localworkspace1 --markdown --pdfs s3://ai2-oe-data/jakep/olmocr/olmOCR-mix-0225/benchmark_set/*.pdf"
 if model:
     perf_pipeline_cmd += f" --model {model}"
 
@@ -237,9 +268,9 @@ perf_task_spec_args = {
         priority=Priority.normal,
         preemptible=True,
     ),
-    # Need to reserve all 8 gpus for performance spec or else benchmark results can be off (1 for b200 mode)
-    "resources": TaskResources(gpu_count=1 if b200_mode else 8),
-    "constraints": Constraints(cluster=["ai2/titan-cirrascale"] if b200_mode else ["ai2/ceres-cirrascale", "ai2/jupiter-cirrascale-2"]),
+    # Need to reserve all 8 gpus for performance spec or else benchmark results can be off (1 for titan-cirrascale)
+    "resources": TaskResources(gpu_count=1 if cluster == "ai2/titan-cirrascale" else 8),
+    "constraints": Constraints(cluster=[cluster] if cluster else ["ai2/ceres-cirrascale", "ai2/jupiter-cirrascale-2"]),
     "result": ResultSpec(path="/noop-results"),
 }
 
@@ -273,14 +304,19 @@ if [ -n "$MODEL" ]; then
     CMD="$CMD $MODEL"
 fi
 
-if [ -n "$B200_MODE" ]; then
-    echo "Using B200 mode: ai2/titan-cirrascale cluster with 1 GPU for perf task"
-    CMD="$CMD --b200"
+if [ -n "$CLUSTER" ]; then
+    echo "Using cluster: $CLUSTER"
+    CMD="$CMD --cluster $CLUSTER"
 fi
 
 if [ -n "$BENCH_BRANCH" ]; then
     echo "Using bench branch: $BENCH_BRANCH"
     CMD="$CMD --benchbranch $BENCH_BRANCH"
+fi
+
+if [ "$REPEATS" != "1" ]; then
+    echo "Using repeats: $REPEATS"
+    CMD="$CMD --repeats $REPEATS"
 fi
 
 eval $CMD
