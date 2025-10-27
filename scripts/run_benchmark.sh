@@ -11,6 +11,8 @@
 #   ./scripts/run_benchmark.sh --beaker-image jakep/olmocr-benchmark-0.3.3-780bc7d934
 #  With repeats parameter: run the pipeline multiple times for increased accuracy (default: 1)
 #   ./scripts/run_benchmark.sh --repeats 3
+#  With noperf flag: skip the performance test job
+#   ./scripts/run_benchmark.sh --noperf
 
 set -e
 
@@ -20,6 +22,7 @@ CLUSTER=""
 BENCH_BRANCH=""
 BEAKER_IMAGE=""
 REPEATS="1"
+NOPERF=""
 while [[ $# -gt 0 ]]; do
     case $1 in
         --model)
@@ -42,9 +45,13 @@ while [[ $# -gt 0 ]]; do
             REPEATS="$2"
             shift 2
             ;;
+        --noperf)
+            NOPERF="1"
+            shift
+            ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 [--model MODEL_NAME] [--cluster CLUSTER_NAME] [--benchbranch BRANCH_NAME] [--beaker-image IMAGE_NAME] [--repeats NUMBER]"
+            echo "Usage: $0 [--model MODEL_NAME] [--cluster CLUSTER_NAME] [--benchbranch BRANCH_NAME] [--beaker-image IMAGE_NAME] [--repeats NUMBER] [--noperf]"
             exit 1
             ;;
     esac
@@ -123,6 +130,7 @@ model = None
 cluster = None
 bench_branch = None
 repeats = 1
+noperf = False
 
 # Parse remaining arguments
 arg_idx = 5
@@ -136,6 +144,9 @@ while arg_idx < len(sys.argv):
     elif sys.argv[arg_idx] == "--repeats":
         repeats = int(sys.argv[arg_idx + 1])
         arg_idx += 2
+    elif sys.argv[arg_idx] == "--noperf":
+        noperf = True
+        arg_idx += 1
     else:
         model = sys.argv[arg_idx]
         arg_idx += 1
@@ -243,54 +254,57 @@ print(f"View at: https://beaker.org/ex/{experiment.id}")
 print("-------")
 print("")
 
-# Second experiment: Performance test job
-perf_pipeline_cmd = "python -m olmocr.pipeline ./localworkspace1 --markdown --pdfs s3://ai2-oe-data/jakep/olmocr/olmOCR-mix-0225/benchmark_set/*.pdf"
-if model:
-    perf_pipeline_cmd += f" --model {model}"
+# Second experiment: Performance test job (only if --noperf not specified)
+if not noperf:
+    perf_pipeline_cmd = "python -m olmocr.pipeline ./localworkspace1 --markdown --pdfs s3://ai2-oe-data/jakep/olmocr/olmOCR-mix-0225/benchmark_set/*.pdf"
+    if model:
+        perf_pipeline_cmd += f" --model {model}"
 
-perf_commands = []
-if has_aws_creds:
-    perf_commands.extend([
-        "mkdir -p ~/.aws",
-        'echo "$AWS_CREDENTIALS_FILE" > ~/.aws/credentials'
-    ])
-perf_commands.append(perf_pipeline_cmd)
+    perf_commands = []
+    if has_aws_creds:
+        perf_commands.extend([
+            "mkdir -p ~/.aws",
+            'echo "$AWS_CREDENTIALS_FILE" > ~/.aws/credentials'
+        ])
+    perf_commands.append(perf_pipeline_cmd)
 
-# Build performance task spec
-perf_task_spec_args = {
-    "name": "olmocr-performance",
-    "image": ImageSource(beaker=image_ref),
-    "command": [
-        "bash", "-c",
-        " && ".join(perf_commands)
-    ],
-    "context": TaskContext(
-        priority=Priority.normal,
-        preemptible=True,
-    ),
-    # Need to reserve all 8 gpus for performance spec or else benchmark results can be off (1 for titan-cirrascale)
-    "resources": TaskResources(gpu_count=1 if cluster == "ai2/titan-cirrascale" else 8),
-    "constraints": Constraints(cluster=[cluster] if cluster else ["ai2/ceres-cirrascale", "ai2/jupiter-cirrascale-2"]),
-    "result": ResultSpec(path="/noop-results"),
-}
+    # Build performance task spec
+    perf_task_spec_args = {
+        "name": "olmocr-performance",
+        "image": ImageSource(beaker=image_ref),
+        "command": [
+            "bash", "-c",
+            " && ".join(perf_commands)
+        ],
+        "context": TaskContext(
+            priority=Priority.normal,
+            preemptible=True,
+        ),
+        # Need to reserve all 8 gpus for performance spec or else benchmark results can be off (1 for titan-cirrascale)
+        "resources": TaskResources(gpu_count=1 if cluster == "ai2/titan-cirrascale" else 8),
+        "constraints": Constraints(cluster=[cluster] if cluster else ["ai2/ceres-cirrascale", "ai2/jupiter-cirrascale-2"]),
+        "result": ResultSpec(path="/noop-results"),
+    }
 
-# Add env vars if AWS credentials exist
-if has_aws_creds:
-    perf_task_spec_args["env_vars"] = [
-        EnvVar(name="AWS_CREDENTIALS_FILE", secret=aws_creds_secret)
-    ]
+    # Add env vars if AWS credentials exist
+    if has_aws_creds:
+        perf_task_spec_args["env_vars"] = [
+            EnvVar(name="AWS_CREDENTIALS_FILE", secret=aws_creds_secret)
+        ]
 
-# Create performance experiment spec
-perf_experiment_spec = ExperimentSpec(
-    description=f"OlmOCR Performance Test - Branch: {git_branch}, Commit: {git_hash}",
-    budget="ai2/oe-base",
-    tasks=[TaskSpec(**perf_task_spec_args)],
-)
+    # Create performance experiment spec
+    perf_experiment_spec = ExperimentSpec(
+        description=f"OlmOCR Performance Test - Branch: {git_branch}, Commit: {git_hash}",
+        budget="ai2/oe-base",
+        tasks=[TaskSpec(**perf_task_spec_args)],
+    )
 
-# Create the performance experiment
-perf_experiment = b.experiment.create(spec=perf_experiment_spec, workspace="ai2/olmocr")
-print(f"Created performance experiment: {perf_experiment.id}")
-print(f"View at: https://beaker.org/ex/{perf_experiment.id}")
+    # Create the performance experiment
+    perf_experiment = b.experiment.create(spec=perf_experiment_spec, workspace="ai2/olmocr")
+    print(f"Created performance experiment: {perf_experiment.id}")
+    print(f"View at: https://beaker.org/ex/{perf_experiment.id}")
+else:
+    print("Skipping performance test (--noperf flag specified)")
 EOF
 
 # Run the Python script to create the experiments
@@ -317,6 +331,11 @@ fi
 if [ "$REPEATS" != "1" ]; then
     echo "Using repeats: $REPEATS"
     CMD="$CMD --repeats $REPEATS"
+fi
+
+if [ -n "$NOPERF" ]; then
+    echo "Skipping performance tests"
+    CMD="$CMD --noperf"
 fi
 
 eval $CMD
