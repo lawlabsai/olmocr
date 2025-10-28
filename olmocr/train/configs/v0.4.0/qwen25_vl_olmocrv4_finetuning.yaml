@@ -50,7 +50,7 @@ dataset:
 
   eval:
     - name: eval_finetuning_data
-      root_dir: /root/test-berkshire-data
+      root_dir: /root/test-berkshire-data/2bbb
       pipeline: *basic_pipeline
 
 # Training configuration
