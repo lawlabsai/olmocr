@@ -25,11 +25,11 @@ class Args:
     server: str = "http://localhost:30044/v1"
     port: int = 30044
     model_chat_template: str = "qwen2-vl"
-    max_model_len: int = 8192
+    max_model_len: int = 16384
     guided_decoding: bool = False
     gpu_memory_utilization: float = 0.8
-    target_longest_image_dim: int = 1024
-    target_anchor_text_len: int = 6000
+    target_longest_image_dim: int = 1288
+    target_anchor_text_len: int = -1
     max_page_retries: int = 8
     max_page_error_rate: float = 0.004
     tensor_parallel_size: int = 1
