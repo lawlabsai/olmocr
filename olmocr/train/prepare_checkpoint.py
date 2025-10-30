@@ -44,7 +44,11 @@ import torch
 from botocore.exceptions import ClientError
 from smart_open import smart_open
 from tqdm import tqdm
-from transformers import AutoConfig, Qwen2VLForConditionalGeneration, Qwen2_5_VLForConditionalGeneration
+from transformers import (
+    AutoConfig,
+    Qwen2_5_VLForConditionalGeneration,
+    Qwen2VLForConditionalGeneration,
+)
 
 try:
     from safetensors.torch import load_file, save_file

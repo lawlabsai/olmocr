@@ -11,7 +11,7 @@ Then, add in some extra training requirements:
 ```bash
 pip install .[train]
 pip install transformers==4.52.4
-pip install flash-attn==2.8.0.post2 --no-build-isolation
+pip install flash-attn>=2.8.0.post2 --no-build-isolation
 ```
 
 
@@ -64,23 +64,38 @@ python -m olmocr.data.prepare_olmocrmix --dataset-path allenai/olmOCR-mix-1025 -
 
 python -m olmocr.data.prepare_olmocrmix --dataset-path allenai/olmOCR-mix-1025 --destination ~/olmOCR-mix-1025-extracted --subset 03_national_archives --split train                       
 python -m olmocr.data.prepare_olmocrmix --dataset-path allenai/olmOCR-mix-1025 --destination ~/olmOCR-mix-1025-extracted --subset 03_national_archives --split eval
-
 ```
+
+The second easiest way to get training data is to use olmOCR to convert a bunch of documents and then adjust the results to better suit you. Once you have an olmOCR workspace with some converted PDFs,
+you can use the `olmocr.data.prepare_workspace` script to extract those into the proper format.
+
+```bash
+python -m olmocr.pipeline ./localworkspace --pdfs /home/username/pdfs/*.pdf
+python -m olmocr.data.prepare_workspace ./localworkspace ./localtrainingdata
+```
+
+`./localtrainingdata` will now have data in the proper format, each PDF split into a single page, etc, that you can use for fine tuning.
 
 ### Setup your config
 
-[olmOCR-7B-0725-FP8](https://huggingface.co/allenai/olmOCR-7B-0725-FP8) was trained with [qwen25_vl_olmocrv2_2epoch.yaml](/olmcr/train/configs/v0.2.0/qwen25_vl_olmocrv2_2epoch.yaml)
+#### Reference configs for released models:
+- [olmOCR-7B-0725-FP8](https://huggingfae.co/allenai/olmOCR-7B-0725-FP8) was trained with [qwen25_vl_olmocrv2_2epoch.yaml](/olmcr/train/configs/v0.2.0/qwen25_vl_olmocrv2_2epoch.yaml)
 
-[olmOCR-7B-0825-FP8](https://huggingface.co/allenai/olmOCR-7B-0825-FP8) was trained with [qwen25_vl_olmocrv3_rotation_1epoch.yaml](/olmocr/train/configs/v0.3.0/qwen25_vl_olmocrv3_rotation_1epoch.yaml)
+- [olmOCR-7B-0825-FP8](https://huggingface.co/allenai/olmOCR-7B-0825-FP8) was trained with [qwen25_vl_olmocrv3_rotation_1epoch.yaml](/olmocr/train/configs/v0.3.0/qwen25_vl_olmocrv3_rotation_1epoch.yaml)
 
-[olmOCR-2-7B-1025-FP8](https://huggingface.co/allenai/olmOCR-2-7B-1025-FP8) was trained with [qwen25_vl_olmocrv4_rotation_1epoch_mix_1025_filtered.yaml](/olmocr/train/configs/v0.4.0/qwen25_vl_olmocrv4_rotation_1epoch_mix_1025_filtered.yaml)
+- [olmOCR-2-7B-1025-FP8](https://huggingface.co/allenai/olmOCR-2-7B-1025-FP8) was trained with [qwen25_vl_olmocrv4_rotation_1epoch_mix_1025_filtered.yaml](/olmocr/train/configs/v0.4.0/qwen25_vl_olmocrv4_rotation_1epoch_mix_1025_filtered.yaml)
 
 
-This is setup to train on a single B200 GPU, and training will take around 24-48 hours (~$300 if renting). 
+These are setup to train on a single B200 GPU, and training will take around 24-48 hours (~$300 if renting). A single epoch on our full model is ~270,000 page, so it's quite a big endeavour. 
 
 You may need to adjust the paths in the dataset section of the config to match where you downloaded and extracted the training mix. And also set the output_dir to a location where you would like to save checkpoints. 
 
-These configs train for ~270,000 pages per epoch, so it's quite a big endeavour. We hope to add more options to make further finetuning your own small model more simple and easy.
+#### Finetuning Configs
+If you would like to finetune on a smaller amount of local data, with a LoRA adapter, try the following
+- Basic finetuning config: [qwen25_vl_olmocrv4_finetuning.yaml](/olmocr/train/configs/v0.4.0/qwen25_vl_olmocrv4_finetuning.yaml)
+
+You'll still need to adjust your paths accordingly.
+
 
 ### Launch training job
 
@@ -97,7 +112,12 @@ and get them ready for use with VLLM.
 python -m olmocr.train.prepare_olmocr_checkpoint [source dir]/checkpoint-xxxx [destination]
 ```
 
-And finally, we recommend doing an FP8 quantization step, whose performance is solidly in the error bars of the raw
+If you just finetuned a LoRA adapter, you should run the `prepare_checkpoint.py` script as above, it will merge the weights into a full model and adjust the configs so you can easily run the model.
+
+#### FP8 Quantization
+
+The training process operates in BF16 weights natively, even if you are just training a LoRA adapter.
+We recommend doing an FP8 quantization step, whose performance is solidly in the error bars of the raw
 bfloat16 model, but uses less memory and inferences around 12% faster.
 
 ```bash
