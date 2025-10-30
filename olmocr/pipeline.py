@@ -269,6 +269,10 @@ async def process_page(args, worker_id: int, pdf_orig_path: str, pdf_local_path:
         # Change temperature as number of attempts increases to overcome repetition issues at expense of quality
         query["temperature"] = TEMPERATURE_BY_ATTEMPT[lookup_attempt]
 
+        # Add priority optionally, to help get retries done faster and the queue cleared sooner
+        # this helps on situations where your jobs are preemptible on a cluster
+        query["priority"] = MAX_RETRIES - attempt
+
         # Enable guided decoding regex if needed
         if args.guided_decoding:
             query["guided_regex"] = (
@@ -639,6 +643,8 @@ async def vllm_server_task(model_name_or_path, args, semaphore, unknown_args=Non
         str(args.tensor_parallel_size),
         "--data-parallel-size",
         str(args.data_parallel_size),
+        "--scheduling-policy",
+        "priority",
         "--limit-mm-per-prompt",
         '{"video": 0}',  # Disabling video encoder saves RAM that you can put towards the KV cache, thanks @charitarthchugh
     ]
