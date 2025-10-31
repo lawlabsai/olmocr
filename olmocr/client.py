@@ -5,7 +5,6 @@ All processing happens in memory without saving to disk.
 
 import asyncio
 import base64
-import json
 
 import fitz
 import httpx
@@ -84,7 +83,7 @@ class OlmOCRClient:
             "temperature": 0.0,
         }
 
-        while attempt < self.max_retries:
+        while True:
             lookup_attempt = min(attempt, len(TEMPERATURE_BY_ATTEMPT) - 1)
 
             query["temperature"] = TEMPERATURE_BY_ATTEMPT[lookup_attempt]
@@ -128,14 +127,13 @@ class OlmOCRClient:
                 await asyncio.sleep(sleep_delay)
             except asyncio.CancelledError:
                 raise
-            except json.JSONDecodeError:
-                attempt += 1
-            except ValueError:
-                attempt += 1
             except Exception:
-                attempt += 1
+                if attempt < self.max_retries:
+                    attempt += 1
+                else:
+                    raise
 
-        raise ValueError(f"Failed to process page {page_num}")
+        raise ValueError(f"Failed to process page {page_num} after {self.max_retries} attempts")
 
     async def _process_page(self, page_num: int, fitz_doc: fitz.Document) -> PageResponse:
         async with self._page_semaphore:
