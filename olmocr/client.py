@@ -6,11 +6,10 @@ All processing happens in memory without saving to disk.
 import asyncio
 import base64
 import json
-import ssl
 import subprocess
 from io import BytesIO
-from urllib.parse import urlparse
 
+import httpx
 from PIL import Image
 from pypdf import PdfReader
 
@@ -55,94 +54,20 @@ class OlmOCRClient:
         self.model_name = model_name
         self.max_retries = max_retries
         self._completion_url = f"{self.server_url.rstrip('/')}/chat/completions"
+        self._client = httpx.AsyncClient()
 
     async def _apost(self, json_data: dict) -> tuple[int, bytes]:
-        """Simple async HTTP POST implementation."""
-        parsed_url = urlparse(self._completion_url)
-        host = parsed_url.hostname
-        if parsed_url.scheme == "https":
-            port = parsed_url.port or 443
-            use_ssl = True
-        else:
-            port = parsed_url.port or 80
-            use_ssl = False
-        path = parsed_url.path or "/"
+        """Simple async HTTP POST implementation using httpx."""
+        headers = {}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
 
-        writer = None
-        try:
-            if use_ssl:
-                ssl_context = ssl.create_default_context()
-                reader, writer = await asyncio.open_connection(host, port, ssl=ssl_context)
-            else:
-                reader, writer = await asyncio.open_connection(host, port)
-
-            json_payload = json.dumps(json_data)
-
-            headers = [
-                f"POST {path} HTTP/1.1",
-                f"Host: {host}",
-                f"Content-Type: application/json",
-                f"Content-Length: {len(json_payload)}",
-            ]
-
-            if self.api_key:
-                headers.append(f"Authorization: Bearer {self.api_key}")
-
-            headers.append("Connection: close")
-
-            request = "\r\n".join(headers) + "\r\n\r\n" + json_payload
-            writer.write(request.encode())
-            await writer.drain()
-
-            status_line = await reader.readline()
-            if not status_line:
-                raise ConnectionError("No response from server")
-            status_parts = status_line.decode().strip().split(" ", 2)
-            if len(status_parts) < 2:
-                raise ValueError(f"Malformed status line: {status_line.decode().strip()}")
-            status_code = int(status_parts[1])
-
-            # Read headers
-            headers = {}
-            while True:
-                line = await reader.readline()
-                if line in (b"\r\n", b"\n", b""):
-                    break
-                key, _, value = line.decode().partition(":")
-                headers[key.strip().lower()] = value.strip()
-
-            # Read response body
-            if "content-length" in headers:
-                body_length = int(headers["content-length"])
-                response_body = await reader.readexactly(body_length)
-            elif headers.get("transfer-encoding", "") == "chunked":
-                chunks = []
-                while True:
-                    size_line = await reader.readline()
-                    chunk_size = int(size_line.strip(), 16)
-
-                    if chunk_size == 0:
-                        await reader.readline()
-                        break
-
-                    chunk_data = await reader.readexactly(chunk_size)
-                    chunks.append(chunk_data)
-                    await reader.readline()
-
-                response_body = b"".join(chunks)
-            elif headers.get("connection", "") == "close":
-                response_body = await reader.read()
-            else:
-                raise ConnectionError("Cannot determine response body length")
-
-            return status_code, response_body
-        finally:
-            if writer is not None:
-                try:
-                    writer.close()
-                    await writer.wait_closed()
-                except:
-                    pass
+        response = await self._client.post(
+            self._completion_url,
+            json=json_data,
+            headers=headers,
+        )
+        return response.status_code, response.content
 
     def _get_pdf_page_dimensions(self, pdf_reader: PdfReader, page_num: int) -> tuple[float, float]:
         """Get the dimensions of a PDF page in points."""
@@ -218,9 +143,11 @@ class OlmOCRClient:
         """Process a single page and return its text."""
         MODEL_MAX_CONTEXT = 16384
         TEMPERATURE_BY_ATTEMPT = [0.1, 0.1, 0.2, 0.3, 0.5, 0.8, 0.9, 1.0]
+        exponential_backoffs = 0
         cumulative_rotation = 0
+        attempt = 0
 
-        for attempt in range(self.max_retries):
+        while attempt < self.max_retries:
             lookup_attempt = min(attempt, len(TEMPERATURE_BY_ATTEMPT) - 1)
 
             query = await self._build_page_query(pdf_bytes, page_num, pdf_reader, image_rotation=cumulative_rotation)
@@ -230,21 +157,21 @@ class OlmOCRClient:
                 status_code, response_body = await self._apost(json_data=query)
 
                 if status_code == 400:
-                    raise ValueError(f"BadRequestError from server: {response_body}")
+                    raise ValueError(f"Got BadRequestError from server: {response_body}, skipping this response")
                 elif status_code == 429:
-                    raise ConnectionError("Too many requests")
+                    raise ConnectionError("Too many requests, doing exponential backoff")
                 elif status_code == 500:
-                    raise ValueError(f"InternalServerError from server: {response_body}")
+                    raise ValueError(f"Got InternalServerError from server: {response_body}, skipping this response")
                 elif status_code != 200:
                     raise ValueError(f"Error http status {status_code}")
 
                 base_response_data = json.loads(response_body)
 
                 if base_response_data["usage"]["total_tokens"] > MODEL_MAX_CONTEXT:
-                    raise ValueError(f"Response exceeded model_max_context of {MODEL_MAX_CONTEXT}")
+                    raise ValueError(f"Response exceeded model_max_context of {MODEL_MAX_CONTEXT}, cannot use this response")
 
                 if base_response_data["choices"][0]["finish_reason"] != "stop":
-                    raise ValueError("Response did not finish with reason code 'stop'")
+                    raise ValueError("Response did not finish with reason code 'stop', cannot use this response")
 
                 model_response_markdown = base_response_data["choices"][0]["message"]["content"]
 
@@ -254,18 +181,25 @@ class OlmOCRClient:
 
                 if not page_response.is_rotation_valid and attempt < self.max_retries - 1:
                     cumulative_rotation = (cumulative_rotation + page_response.rotation_correction) % 360
-                    raise ValueError(f"Invalid page rotation, retrying with rotation {cumulative_rotation}")
+                    raise ValueError(f"invalid_page rotation, retrying with rotation {cumulative_rotation}")
 
                 return page_response.natural_text or ""
 
-            except (ConnectionError, ValueError):
-                if attempt == self.max_retries - 1:
-                    raise
-                await asyncio.sleep(1 * (attempt + 1))  # Exponential backoff
+            except (ConnectionError, OSError, asyncio.TimeoutError):
+                # Now we want to do exponential backoff, and not count this as an actual page retry
+                # Page retries are supposed to be for fixing bad results from the model, but actual requests to vllm
+                # are supposed to work. Probably this means that the server is just restarting
+                sleep_delay = 10 * (2**exponential_backoffs)
+                exponential_backoffs += 1
+                await asyncio.sleep(sleep_delay)
+            except asyncio.CancelledError:
+                raise
+            except json.JSONDecodeError:
+                attempt += 1
+            except ValueError:
+                attempt += 1
             except Exception:
-                if attempt == self.max_retries - 1:
-                    raise
-                await asyncio.sleep(1 * (attempt + 1))
+                attempt += 1
 
         return ""
 
@@ -305,3 +239,15 @@ class OlmOCRClient:
 
         # Combine all page texts
         return "\n".join(page_texts)
+
+    async def close(self) -> None:
+        """Close the HTTP client and cleanup resources."""
+        await self._client.aclose()
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        await self.close()
