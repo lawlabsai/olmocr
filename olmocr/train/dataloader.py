@@ -46,6 +46,9 @@ Sample: TypeAlias = Dict[str, Any]
 # Configure logging
 logger = logging.getLogger(__name__)
 
+# disable logger
+logger.disabled = True
+
 
 def validate_pdf_pair(md_path: Path) -> Tuple[Optional[Dict[str, Path]], Optional[Tuple[Path, str]]]:
     """Validate a single markdown-PDF pair.
@@ -356,8 +359,7 @@ class FrontMatterOutputFormat(PipelineStep):
         page_data = sample["page_data"]
         assert type(page_data) is PageResponse
 
-        sample["response"] = (
-            f"""---
+        sample["response"] = f"""---
 primary_language: {page_data.primary_language}
 is_rotation_valid: {page_data.is_rotation_valid}
 rotation_correction: {page_data.rotation_correction}
@@ -366,7 +368,6 @@ is_diagram: {page_data.is_diagram}
 ---
 {page_data.natural_text if page_data.natural_text is not None and len(page_data.natural_text.strip()) > 0 else ""}
 """.strip()
-        )
 
         return sample
 
@@ -1586,8 +1587,8 @@ if __name__ == "__main__":
             masked_count = np.sum(labels == -100)
             total_count = len(labels)
             print(f"  Total tokens: {total_count}")
-            print(f"  Masked tokens: {masked_count} ({masked_count/total_count*100:.1f}%)")
-            print(f"  Unmasked tokens: {total_count - masked_count} ({(total_count - masked_count)/total_count*100:.1f}%)")
+            print(f"  Masked tokens: {masked_count} ({masked_count / total_count * 100:.1f}%)")
+            print(f"  Unmasked tokens: {total_count - masked_count} ({(total_count - masked_count) / total_count * 100:.1f}%)")
 
             # Find the transition point
             transition_idx = None

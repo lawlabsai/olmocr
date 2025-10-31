@@ -33,6 +33,7 @@ class OlmOCRClient:
         target_longest_image_dim: int = 1288,
         model_name: str = "olmocr",
         max_retries: int = 8,
+        semaphore: int = 100,
     ):
         """
         Initialize the olmOCR client.
@@ -52,7 +53,7 @@ class OlmOCRClient:
         self._completion_url = f"{self.server_url.rstrip('/')}/chat/completions"
         self._client = httpx.AsyncClient()
 
-        self._page_semaphore = asyncio.Semaphore(100)
+        self._page_semaphore = asyncio.Semaphore(semaphore)
 
     async def __process_page(self, page_num: int, fitz_doc: fitz.Document) -> PageResponse:
         """Process a single page and return its text."""
