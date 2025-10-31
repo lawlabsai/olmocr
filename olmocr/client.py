@@ -60,6 +60,11 @@ class OlmOCRClient:
 
         self._page_semaphore = asyncio.Semaphore(semaphore)
 
+        self._num_pending_requests = 0
+
+    def get_num_pending_requests(self) -> int:
+        return self._num_pending_requests
+
     async def __process_page(self, page_num: int, fitz_doc: fitz.Document) -> PageResponse:
         """Process a single page and return its text."""
         MODEL_MAX_CONTEXT = 16384
@@ -128,23 +133,28 @@ class OlmOCRClient:
                     raise ValueError(f"invalid_page rotation, skipping this response")
 
                 return page_response
-            except (ConnectionError, OSError, asyncio.TimeoutError):
-                sleep_delay = 10 * (2**exponential_backoffs)
-                exponential_backoffs += 1
-                await asyncio.sleep(sleep_delay)
             except asyncio.CancelledError:
                 raise
             except Exception:
                 if attempt < self.max_retries:
+                    sleep_delay = 10 * (2**exponential_backoffs)
+                    exponential_backoffs += 1
+                    print(f"Exception, sleeping for {sleep_delay} seconds")
                     attempt += 1
+                    await asyncio.sleep(sleep_delay)
                 else:
+                    print(f"Failed to process page {page_num} after {self.max_retries} attempts")
                     raise
 
         raise ValueError(f"Failed to process page {page_num} after {self.max_retries} attempts")
 
     async def _process_page(self, page_num: int, fitz_doc: fitz.Document) -> PageResponse:
         async with self._page_semaphore:
-            return await self.__process_page(page_num, fitz_doc)
+            self._num_pending_requests += 1
+            try:
+                return await self.__process_page(page_num, fitz_doc)
+            finally:
+                self._num_pending_requests -= 1
 
     async def extract_text(self, pdf_bytes: bytes) -> list[PageResponse]:
         """
