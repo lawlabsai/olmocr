@@ -53,20 +53,9 @@ class OlmOCRClient:
         self._completion_url = f"{self.server_url.rstrip('/')}/chat/completions"
         self._client = httpx.AsyncClient()
 
-    async def _apost(self, json_data: dict) -> tuple[int, bytes]:
-        """Simple async HTTP POST implementation using httpx."""
-        headers = {}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
+        self._page_semaphore = asyncio.Semaphore(100)
 
-        response = await self._client.post(
-            self._completion_url,
-            json=json_data,
-            headers=headers,
-        )
-        return response.status_code, response.content
-
-    async def _process_page(self, page_num: int, fitz_doc: fitz.Document) -> PageResponse:
+    async def __process_page(self, page_num: int, fitz_doc: fitz.Document) -> PageResponse:
         """Process a single page and return its text."""
         MODEL_MAX_CONTEXT = 16384
         TEMPERATURE_BY_ATTEMPT = [0.1, 0.1, 0.2, 0.3, 0.5, 0.8, 0.9, 1.0]
@@ -147,6 +136,10 @@ class OlmOCRClient:
                 attempt += 1
 
         raise ValueError(f"Failed to process page {page_num}")
+
+    async def _process_page(self, page_num: int, fitz_doc: fitz.Document) -> PageResponse:
+        async with self._page_semaphore:
+            return await self.__process_page(page_num, fitz_doc)
 
     async def extract_text(self, pdf_bytes: bytes) -> list[PageResponse]:
         """
