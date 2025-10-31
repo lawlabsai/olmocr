@@ -16,32 +16,33 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 authors = [
-    {name = "Allen Institute for Artificial Intelligence", email = "jakep@allenai.org"}
+    { name = "Allen Institute for Artificial Intelligence", email = "jakep@allenai.org" },
 ]
 requires-python = ">=3.11"
 dependencies = [
-  "cached-path",
-  "smart_open",
-  "pypdf>=5.2.0",
-  "pypdfium2",
-  "cryptography",
-  "lingua-language-detector",
-  "Pillow",
-  "ftfy",
-  "bleach",
-  "markdown2",
-  "markdownify",
-  "filelock",
-  "orjson",
-  "requests",
-  "zstandard",
-  "boto3",
-  "httpx",
-  "torch>=2.7.0",
-  "transformers==4.55.2",
-  "beaker-py",
+    "cached-path",
+    "smart_open",
+    "pypdf>=5.2.0",
+    "pymupdf>=1.25.5",
+    "pypdfium2",
+    "cryptography",
+    "lingua-language-detector",
+    "Pillow",
+    "ftfy",
+    "bleach",
+    "markdown2",
+    "markdownify",
+    "filelock",
+    "orjson",
+    "requests",
+    "zstandard",
+    "boto3",
+    "httpx",
+    "torch>=2.7.0",
+    "transformers==4.55.2",
+    "beaker-py",
 ]
-license = {file = "LICENSE"}
+license = { file = "LICENSE" }
 
 [project.urls]
 Homepage = "https://github.com/allenai/olmocr"
@@ -50,9 +51,7 @@ Changelog = "https://github.com/allenai/olmocr/blob/main/CHANGELOG.md"
 # Documentation = "https://olmocr.readthedocs.io/"
 
 [project.optional-dependencies]
-gpu = [
-    "vllm==0.11.0"
-]
+gpu = ["vllm==0.11.0"]
 
 dev = [
     "ruff",
@@ -110,22 +109,10 @@ train = [
     "augraphy",
 ]
 
-elo = [
-    "numpy",
-    "scipy",
-    "pandas",
-    "matplotlib"
-]
+elo = ["numpy", "scipy", "pandas", "matplotlib"]
 
 [tool.setuptools.packages.find]
-exclude = [
-    "*.tests",
-    "*.tests.*",
-    "tests.*",
-    "tests",
-    "docs*",
-    "scripts*"
-]
+exclude = ["*.tests", "*.tests.*", "tests.*", "tests", "docs*", "scripts*"]
 
 [tool.setuptools]
 include-package-data = true
@@ -140,7 +127,7 @@ olmocr = [
 ]
 
 [tool.setuptools.dynamic]
-version = {attr = "olmocr.version.VERSION"}
+version = { attr = "olmocr.version.VERSION" }
 
 [tool.black]
 line-length = 160
@@ -170,7 +157,7 @@ reportPrivateImportUsage = false
 line-length = 160
 target-version = "py311"
 exclude = ["olmocr/train/molmo", "tests/*"]
-ignore = ["E722", "F541"] #igore bare except, and f string without placeholders
+ignore = ["E722", "F541"]                   #igore bare except, and f string without placeholders
 
 [tool.ruff.per-file-ignores]
 "__init__.py" = ["F401"]
@@ -187,13 +174,8 @@ strict_optional = false
 
 [tool.pytest.ini_options]
 testpaths = "tests/"
-python_classes = [
-  "Test*",
-  "*Test"
-]
+python_classes = ["Test*", "*Test"]
 log_format = "%(asctime)s - %(levelname)s - %(name)s - %(message)s"
 log_level = "DEBUG"
-markers = [
-    "nonci: mark test as not intended for CI runs"
-]
+markers = ["nonci: mark test as not intended for CI runs"]
 addopts = "-m 'not nonci'"
