@@ -92,6 +92,7 @@ class OlmOCRClient:
                 response = await self._client.post(
                     self._completion_url,
                     json=query,
+                    timeout=300,
                 )
 
                 if response.status_code == 400:
