@@ -43,12 +43,6 @@ from olmocr.prompts.prompts import (
 # Type alias for samples
 Sample: TypeAlias = Dict[str, Any]
 
-# Configure logging
-logger = logging.getLogger(__name__)
-
-# disable logger
-logger.disabled = True
-
 
 def validate_pdf_pair(md_path: Path) -> Tuple[Optional[Dict[str, Path]], Optional[Tuple[Path, str]]]:
     """Validate a single markdown-PDF pair.
@@ -118,14 +112,14 @@ class BaseMarkdownPDFDataset(Dataset):
         self.samples = []
 
         # Find all markdown files recursively
-        logger.info(f"Scanning for markdown files in {self.root_dir}...")
+        print(f"Scanning for markdown files in {self.root_dir}...")
         md_files = list(self.root_dir.rglob("*.md"))
 
         # Verify each markdown file has a corresponding PDF using ProcessPoolExecutor
         valid_count = 0
         invalid_pdfs = []
 
-        logger.info(f"Validating {len(md_files)} markdown-PDF pairs using ProcessPoolExecutor...")
+        print(f"Validating {len(md_files)} markdown-PDF pairs using ProcessPoolExecutor...")
 
         # Use ProcessPoolExecutor for parallel validation
         with ProcessPoolExecutor(max_workers=8) as executor:
@@ -146,22 +140,12 @@ class BaseMarkdownPDFDataset(Dataset):
                             invalid_pdfs.append(invalid_pdf_info)
 
                     except Exception as e:
-                        logger.error(f"Error processing {md_path}: {str(e)}")
                         invalid_pdfs.append((md_path.with_suffix(".pdf"), f"Processing error: {str(e)}"))
 
                     pbar.update(1)
 
         # Sort samples by markdown path for consistent ordering across runs
         self.samples.sort(key=lambda x: x["markdown_path"])
-
-        logger.info(f"Found {valid_count} valid markdown-PDF pairs")
-
-        if invalid_pdfs:
-            logger.warning(f"{len(invalid_pdfs)} invalid PDFs found:")
-            for pdf_path, reason in invalid_pdfs[:5]:  # Show first 5
-                logger.warning(f"  - {pdf_path.name}: {reason}")
-            if len(invalid_pdfs) > 5:
-                logger.warning(f"  ... and {len(invalid_pdfs) - 5} more")
 
     def __len__(self) -> int:
         return len(self.samples)
@@ -216,7 +200,7 @@ class FrontMatterParser(PipelineStep):
                     front_matter = yaml.safe_load(front_matter_str) or {}
                     return front_matter, text
             except yaml.YAMLError as e:
-                logger.warning(f"Failed to parse YAML front matter: {e}")
+                print(f"Failed to parse YAML front matter: {e}")
 
         return {}, markdown_content.strip()
 
@@ -768,7 +752,7 @@ class DatasetTextRuleFilter(PipelineStep):
                 # Check if there was an error
                 if rendered is None or (hasattr(rendered, "error") and rendered.error):
                     # Equation failed to render
-                    logger.warning(f"Could not render equation '{repr(equation)}', skipping sample")
+                    print(f"Could not render equation '{repr(equation)}', skipping sample")
                     return False
 
             # All equations rendered successfully

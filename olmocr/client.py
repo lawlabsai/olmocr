@@ -5,12 +5,17 @@ All processing happens in memory without saving to disk.
 
 import asyncio
 import base64
+import logging
 
 import fitz
 import httpx
 
 from olmocr.prompts import PageResponse, build_no_anchoring_v4_yaml_prompt
 from olmocr.train.dataloader import FrontMatterParser
+
+# Suppress httpx INFO level logging for HTTP requests
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
 class OlmOCRClient:
